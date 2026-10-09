@@ -1,0 +1,190 @@
+{
+  "date": "2026-10-09",
+  "verified_at": "2026-10-09T08:03:40Z",
+  "title": "AI 工程研究日报",
+  "subtitle": "面向数字人、知识库与 Agent 的可执行研究线索",
+  "edition": 1,
+  "methodology": "本期在公开原始来源核验 7 条线索。近期定义为过去 30 天；历史参考单列。没有把检索日期当成发布日期，未声称这些都是今日首发。工程判断与小实验均为本报建议，未实际复现。",
+  "summary": "优先读 MGAvatar 的几何/外观分阶段设计，再用 20 道带页码真值的问题检查 RAG。若正在自托管 Crawl4AI，先核对 0.9.4 安全更新。",
+  "items": [
+    {
+      "id": "mgavatar",
+      "priority": 1,
+      "category": "数字人 / 几何",
+      "title": "MGAvatar：先修几何，再释放外观自由度",
+      "date": "2026-09-14",
+      "date_label": "9 月 11 日首发，9 月 14 日 v2",
+      "recency": "近 30 天",
+      "finding": "论文采用顶点绑定 Gaussian 优化个性化几何，稳定后切换为面绑定 Gaussian 优化外观，并引入视角条件颜色场。已标注 Pacific Graphics 2026 Journal Track 接收。",
+      "engineering_relevance": "适合参考 FLAME 驱动人头中几何与外观相互补偿的问题；这是混合建模方案，不能直接等同于通用 PLY 转 Mesh 工具。",
+      "action": "对一个已有头像做小消融：固定几何与联合优化各跑一版，检查口周、发际线的网格翻面率和新视角误差。",
+      "caveat": "论文明确保留 FLAME 拓扑；细发丝、衣物褶皱和口腔结构仍有限制。未核实可运行代码状态。",
+      "sources": [
+        {
+          "title": "arXiv 摘要与版本记录",
+          "url": "https://arxiv.org/abs/2609.12850"
+        },
+        {
+          "title": "论文方法与局限",
+          "url": "https://arxiv.org/html/2609.12850v2"
+        }
+      ],
+      "relevance": "适合参考 FLAME 驱动人头中几何与外观相互补偿的问题；这是混合建模方案，不能直接等同于通用 PLY 转 Mesh 工具。",
+      "recency_label": "近 30 天",
+      "source_date": "9 月 11 日首发，9 月 14 日 v2"
+    },
+    {
+      "id": "page-rag",
+      "priority": 2,
+      "category": "知识库 / RAG",
+      "title": "PDF-RAG：页码证据比盲加向量检索更值得测",
+      "date": "2026-09-28",
+      "date_label": "2026-09-28 预印本",
+      "recency": "近 30 天",
+      "finding": "在 595 道法语 PDF 问题中，完整系统 MRR@10 为 0.4450，BM25 为 0.3430；单独稠密检索及简单融合反而弱于 BM25。查询分解带来增益，也增加延迟和输出异常。",
+      "engineering_relevance": "文档知识库需要分别评价答案与证据页，不能用回答流畅度替代检索质量。",
+      "action": "抽 20 道真实问题标注正确页码，比较 BM25、混合检索、加 reranker 三条链路，同时记录页码命中率和 P95 延迟。",
+      "caveat": "结论来自小规模法语 PDF 挑战，不能直接推广到中文、代码库或企业全量语料；预印本结果尚未独立复现。",
+      "sources": [
+        {
+          "title": "论文与实验摘要",
+          "url": "https://arxiv.org/abs/2609.34776"
+        }
+      ],
+      "relevance": "文档知识库需要分别评价答案与证据页，不能用回答流畅度替代检索质量。",
+      "recency_label": "近 30 天",
+      "source_date": "2026-09-28 预印本"
+    },
+    {
+      "id": "crawl4ai",
+      "priority": 3,
+      "category": "采集 / 工具",
+      "title": "Crawl4AI 0.9.4：先核查采集服务的出站边界",
+      "date": "2026-09-23",
+      "date_label": "2026-09-23 版本更新",
+      "recency": "近 30 天",
+      "finding": "官方变更记录列出两条 SSRF 路径和一条配置可信边界绕过修复；新增默认 LXML 剪枝器，并修复表格跨度解析与深度爬取去重。",
+      "engineering_relevance": "当用户 URL 或配置可进入 Docker API 时，安全边界与解析正确性直接影响数据采集服务。",
+      "action": "若使用该工具，先查部署版本和是否接收不可信 URL；在隔离测试环境对 10 个授权页面回归正文、复杂表格与超时行为。",
+      "caveat": "性能提升来自维护者测量，并非本报复现；Docker 服务与进程内 SDK 的受影响范围不同，升级前需读迁移说明。遵守站点规则和访问授权。",
+      "sources": [
+        {
+          "title": "官方 0.9.4 变更记录",
+          "url": "https://github.com/unclecode/crawl4ai/blob/main/CHANGELOG.md"
+        },
+        {
+          "title": "官方发布列表",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        }
+      ],
+      "relevance": "当用户 URL 或配置可进入 Docker API 时，安全边界与解析正确性直接影响数据采集服务。",
+      "recency_label": "近 30 天",
+      "source_date": "2026-09-23 版本更新"
+    },
+    {
+      "id": "minicorp",
+      "priority": 4,
+      "category": "智能体 / 应用",
+      "title": "MiniCorp：用可回放环境评估长链路协作",
+      "date": "2026-10-05",
+      "date_label": "2026-10-05 预印本",
+      "recency": "本周",
+      "finding": "MiniCorp 把内部角色协作与外部电商市场模拟连接起来，持续记录决策、当时信息和后续结果，并通过检查点重放比较不同决策。",
+      "engineering_relevance": "可借鉴的重点是纵向轨迹和反事实评估，适合补充只评价单次工具调用的 Agent 测试。",
+      "action": "给一个现有 Agent 工作流加检查点：保存输入快照、工具结果和决策；从相同状态重放两种策略，比较成功率、成本和越权动作。",
+      "caveat": "这是模拟环境研究，不能据此认定 Agent 已能可靠经营真实公司；模拟器偏差和真实部署迁移需另行验证。",
+      "sources": [
+        {
+          "title": "论文与提交日期",
+          "url": "https://arxiv.org/abs/2610.05912"
+        },
+        {
+          "title": "论文全文",
+          "url": "https://arxiv.org/html/2610.05912v1"
+        }
+      ],
+      "relevance": "可借鉴的重点是纵向轨迹和反事实评估，适合补充只评价单次工具调用的 Agent 测试。",
+      "recency_label": "本周",
+      "source_date": "2026-10-05 预印本"
+    },
+    {
+      "id": "markitdown",
+      "priority": 5,
+      "category": "知识库 / RAG",
+      "title": "MarkItDown 0.1.8：给文档转换补一组边界回归",
+      "date": null,
+      "date_label": "发布页显示 9 月 21 日；年份未在本次页面文本中明确显示",
+      "recency": "版本更新 · 日期部分核验",
+      "finding": "0.1.8 汇总转换修复，包括 CSV 的 BOM、空行及单元格管道符/换行处理，RSS 递归异常回退和公式转换修正。维护者预期典型输入相对 0.1.7 大体不变。",
+      "engineering_relevance": "入库前的格式损坏会传递到 chunk 与引用层；比单看转换成功率更应该检查信息保真。",
+      "action": "建立 6 个小样本：含 BOM 的 CSV、跨行单元格、公式 DOCX、复杂 RSS 等；升级前后比较 Markdown 内容与表格列数。",
+      "caveat": "只核验了发布说明，未运行转换测试；发布年份未确认，因此不计入已确认的近 30 天新闻数量。",
+      "sources": [
+        {
+          "title": "微软官方 0.1.8 发布说明",
+          "url": "https://github.com/microsoft/markitdown/releases/tag/v0.1.8"
+        }
+      ],
+      "relevance": "入库前的格式损坏会传递到 chunk 与引用层；比单看转换成功率更应该检查信息保真。",
+      "recency_label": "版本更新 · 日期部分核验",
+      "source_date": "发布页显示 9 月 21 日；年份未在本次页面文本中明确显示"
+    },
+    {
+      "id": "2d-sugar",
+      "priority": 6,
+      "category": "数字人 / 几何",
+      "title": "2D-SuGaR：把初始化质量纳入网格重建实验",
+      "date": null,
+      "date_label": "仓库标注 Eurographics 2026，未核实具体发布日期",
+      "recency": "历史 / 基线参考",
+      "finding": "官方仓库在 2DGS 中加入单目深度和法线先验、深度引导初始化与退化 Gaussian 聚类剪枝；提供 Mesh 提取和纹理导出流程。",
+      "engineering_relevance": "可作为 Gaussian-to-Mesh 对照路线，重点检查输入 SfM 质量和几何先验，而不只调导出阈值。",
+      "action": "先用一个有合法授权的静态头部多视角样本列复现清单：COLMAP、遮罩、先验、显存预算；设定轮廓误差、孔洞数和法线一致性指标。",
+      "caveat": "仓库主要报告 DTU 静态场景，不能直接外推动态人脸；官方建议完整训练评估使用 24 GB 显存。尚未本地复现。",
+      "sources": [
+        {
+          "title": "官方代码、方法与环境要求",
+          "url": "https://github.com/prajwalcr/2d-sugar"
+        }
+      ],
+      "relevance": "可作为 Gaussian-to-Mesh 对照路线，重点检查输入 SfM 质量和几何先验，而不只调导出阈值。",
+      "recency_label": "历史 / 基线参考",
+      "source_date": "仓库标注 Eurographics 2026，未核实具体发布日期"
+    },
+    {
+      "id": "progressive-avatars",
+      "priority": 7,
+      "category": "数字人 / 几何",
+      "title": "ProgressiveAvatars：把弱网与分级渲染纳入质量目标",
+      "date": "2026-03-17",
+      "date_label": "2026-03-17；页面标注 CVPR 2026 接收",
+      "recency": "历史 / 基线参考",
+      "finding": "方法在模板网格上构建层级 Gaussian，采用面局部坐标保持可动画性，按重要性逐步传输和渲染，面向变化的带宽与计算预算。",
+      "engineering_relevance": "数字人应用除了离线 PSNR，还需要首帧、显存与低带宽条件下的可用画质指标。",
+      "action": "给现有头像准备 25%、50%、100% 三档 Gaussian 预算，测首帧时间、帧率与嘴眼区域误差，确认能否平滑切档。",
+      "caveat": "这条用于补工程基线，不是今日更新；三档预算是建议实验，不能直接当作论文已验证配置。",
+      "sources": [
+        {
+          "title": "论文与日期",
+          "url": "https://arxiv.org/abs/2603.16447"
+        }
+      ],
+      "relevance": "数字人应用除了离线 PSNR，还需要首帧、显存与低带宽条件下的可用画质指标。",
+      "recency_label": "历史 / 基线参考",
+      "source_date": "2026-03-17；页面标注 CVPR 2026 接收"
+    }
+  ],
+  "counts": {
+    "items": 7,
+    "confirmed_recent_30_days": 4,
+    "partial_date_release": 1,
+    "baseline_references": 2
+  },
+  "today_actions": [
+    "15 分钟：核对 Crawl4AI 部署版本及不可信输入入口（如正在使用）。",
+    "30 分钟：给 20 道 RAG 问题补正确页码。",
+    "30 分钟：读 MGAvatar 方法与局限，选定一个几何/外观消融。"
+  ],
+  "edition_label": "首期 / 近期进展与基线",
+  "notice": "本期在公开原始来源核验 7 条线索。近期定义为过去 30 天；历史参考单列。没有把检索日期当成发布日期，未声称这些都是今日首发。工程判断与小实验均为本报建议，未实际复现。"
+}
