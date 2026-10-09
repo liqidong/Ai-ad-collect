@@ -18,7 +18,7 @@
       "finding": "论文采用顶点绑定 Gaussian 优化个性化几何，稳定后切换为面绑定 Gaussian 优化外观，并引入视角条件颜色场。已标注 Pacific Graphics 2026 Journal Track 接收。",
       "engineering_relevance": "适合参考 FLAME 驱动人头中几何与外观相互补偿的问题；这是混合建模方案，不能直接等同于通用 PLY 转 Mesh 工具。",
       "action": "对一个已有头像做小消融：固定几何与联合优化各跑一版，检查口周、发际线的网格翻面率和新视角误差。",
-      "caveat": "论文明确保留 FLAME 拓扑；细发丝、衣物褶皱和口腔结构仍有限制。未核实可运行代码状态。",
+      "caveat": "论文保留 FLAME 拓扑，细发丝、衣褶与口腔几何有限。官方代码已公开，但许可未核实、安装文档有上游遗留；未实际运行。",
       "sources": [
         {
           "title": "arXiv 摘要与版本记录",
@@ -31,7 +31,8 @@
       ],
       "relevance": "适合参考 FLAME 驱动人头中几何与外观相互补偿的问题；这是混合建模方案，不能直接等同于通用 PLY 转 Mesh 工具。",
       "recency_label": "近 30 天",
-      "source_date": "9 月 11 日首发，9 月 14 日 v2"
+      "source_date": "9 月 11 日首发，9 月 14 日 v2",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/mgavatar.md"
     },
     {
       "id": "page-rag",
@@ -53,7 +54,8 @@
       ],
       "relevance": "文档知识库需要分别评价答案与证据页，不能用回答流畅度替代检索质量。",
       "recency_label": "近 30 天",
-      "source_date": "2026-09-28 预印本"
+      "source_date": "2026-09-28 预印本",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/page-rag.md"
     },
     {
       "id": "crawl4ai",
@@ -79,7 +81,8 @@
       ],
       "relevance": "当用户 URL 或配置可进入 Docker API 时，安全边界与解析正确性直接影响数据采集服务。",
       "recency_label": "近 30 天",
-      "source_date": "2026-09-23 版本更新"
+      "source_date": "2026-09-23 版本更新",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/crawl4ai.md"
     },
     {
       "id": "minicorp",
@@ -105,20 +108,21 @@
       ],
       "relevance": "可借鉴的重点是纵向轨迹和反事实评估，适合补充只评价单次工具调用的 Agent 测试。",
       "recency_label": "本周",
-      "source_date": "2026-10-05 预印本"
+      "source_date": "2026-10-05 预印本",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/minicorp.md"
     },
     {
       "id": "markitdown",
       "priority": 5,
       "category": "知识库 / RAG",
       "title": "MarkItDown 0.1.8：给文档转换补一组边界回归",
-      "date": null,
-      "date_label": "发布页显示 9 月 21 日；年份未在本次页面文本中明确显示",
-      "recency": "版本更新 · 日期部分核验",
+      "date": "2026-09-21",
+      "date_label": "2026-09-21 发布；完整时间戳已核实",
+      "recency": "近 30 天",
       "finding": "0.1.8 汇总转换修复，包括 CSV 的 BOM、空行及单元格管道符/换行处理，RSS 递归异常回退和公式转换修正。维护者预期典型输入相对 0.1.7 大体不变。",
       "engineering_relevance": "入库前的格式损坏会传递到 chunk 与引用层；比单看转换成功率更应该检查信息保真。",
       "action": "建立 6 个小样本：含 BOM 的 CSV、跨行单元格、公式 DOCX、复杂 RSS 等；升级前后比较 Markdown 内容与表格列数。",
-      "caveat": "只核验了发布说明，未运行转换测试；发布年份未确认，因此不计入已确认的近 30 天新闻数量。",
+      "caveat": "已核对官方发布说明与标签源码，未运行转换测试；默认转换与需启用的 OCR 路径不同，不能把安装成功等同于全部文档正确转换。",
       "sources": [
         {
           "title": "微软官方 0.1.8 发布说明",
@@ -126,16 +130,17 @@
         }
       ],
       "relevance": "入库前的格式损坏会传递到 chunk 与引用层；比单看转换成功率更应该检查信息保真。",
-      "recency_label": "版本更新 · 日期部分核验",
-      "source_date": "发布页显示 9 月 21 日；年份未在本次页面文本中明确显示"
+      "recency_label": "近 30 天",
+      "source_date": "2026-09-21 发布；完整时间戳已核实",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/markitdown.md"
     },
     {
       "id": "2d-sugar",
       "priority": 6,
       "category": "数字人 / 几何",
       "title": "2D-SuGaR：把初始化质量纳入网格重建实验",
-      "date": null,
-      "date_label": "仓库标注 Eurographics 2026，未核实具体发布日期",
+      "date": "2026-05-01",
+      "date_label": "2026-05-01 预印本；Eurographics 2026 short paper",
       "recency": "历史 / 基线参考",
       "finding": "官方仓库在 2DGS 中加入单目深度和法线先验、深度引导初始化与退化 Gaussian 聚类剪枝；提供 Mesh 提取和纹理导出流程。",
       "engineering_relevance": "可作为 Gaussian-to-Mesh 对照路线，重点检查输入 SfM 质量和几何先验，而不只调导出阈值。",
@@ -149,7 +154,8 @@
       ],
       "relevance": "可作为 Gaussian-to-Mesh 对照路线，重点检查输入 SfM 质量和几何先验，而不只调导出阈值。",
       "recency_label": "历史 / 基线参考",
-      "source_date": "仓库标注 Eurographics 2026，未核实具体发布日期"
+      "source_date": "2026-05-01 预印本；Eurographics 2026 short paper",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/2d-sugar.md"
     },
     {
       "id": "progressive-avatars",
@@ -171,13 +177,14 @@
       ],
       "relevance": "数字人应用除了离线 PSNR，还需要首帧、显存与低带宽条件下的可用画质指标。",
       "recency_label": "历史 / 基线参考",
-      "source_date": "2026-03-17；页面标注 CVPR 2026 接收"
+      "source_date": "2026-03-17；页面标注 CVPR 2026 接收",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-09/progressive-avatars.md"
     }
   ],
   "counts": {
     "items": 7,
-    "confirmed_recent_30_days": 4,
-    "partial_date_release": 1,
+    "confirmed_recent_30_days": 5,
+    "partial_date_release": 0,
     "baseline_references": 2
   },
   "today_actions": [
@@ -186,5 +193,5 @@
     "30 分钟：读 MGAvatar 方法与局限，选定一个几何/外观消融。"
   ],
   "edition_label": "首期 / 近期进展与基线",
-  "notice": "本期在公开原始来源核验 7 条线索。近期定义为过去 30 天；历史参考单列。没有把检索日期当成发布日期，未声称这些都是今日首发。工程判断与小实验均为本报建议，未实际复现。"
+  "notice": "本期在公开原始来源核验 7 条线索。近期定义为过去 30 天；历史参考单列。没有把检索日期当成发布日期，未声称这些都是今日首发。工程判断与小实验均为本报建议，未实际复现。 本期已补充可点开的全文／技术详解。"
 }
