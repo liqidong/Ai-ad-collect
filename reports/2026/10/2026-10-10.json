@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-10",
+  "title": "AI 工程研究日报",
+  "edition_label": "增量核查 / 官方能力与近期论文补充",
+  "summary": "重点：Claude 10月9日新增后台动态工作流 beta，接入时必须区分程序结束与任务质量。另补两篇近期研究：NativeScope揭示错误锚点会损害检索；Fresco++改善头像跨视角渲染，但未证明Mesh测量精度。",
+  "notice": "对照2026-10-09期去重：1项10月9日官方机制更新，2项此前已提交论文的首次补充收录；后两项不是今日首发。未核实到新的保轮廓摄影测量能力或合规采集工具release，OpenAI亦未核实到10月9日新增使用机制。所有实验数字为作者报告，均未独立复现；工具机制来自官方文档，工程建议单独标明。",
+  "verified_at": "2026-10-10T00:03:36Z",
+  "items": [
+    {
+      "id": "claude-dynamic-workflows-20261009",
+      "title": "Claude把多智能体任务变成后台工作流",
+      "finding": "Claude Managed Agents于10月9日推出dynamic workflows beta：代理生成分阶段编排程序，由服务器后台运行多个代理并合并结果。",
+      "relevance": "适合批量文档审查、迁移和交叉核验；主线程可继续交流，省去逐个协调中间结果的工作。",
+      "action": "用带人工答案的小型文档集对比串行方案，并同时验收覆盖率、成本和耗时；接入时实现run结束与主线程end_turn的双重完成判断。",
+      "caveat": "仍为beta，无官方量化加速基准；run的completed不保证所有子任务成功。预算暂停与中断也不能直接视为任务结束。",
+      "recency_label": "10月9日官方新增（本期收录）",
+      "source_date": "2026-10-09",
+      "category": "大模型前沿用法",
+      "source_url": "https://platform.claude.com/docs/en/release-notes/overview",
+      "detail_id": "claude-dynamic-workflows-20261009",
+      "sources": [
+        {
+          "title": "Claude Platform release notes：2026-10-09",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-10/claude-dynamic-workflows-20261009.md"
+    },
+    {
+      "id": "nativescope-2610-12243",
+      "title": "NativeScope：结构过滤有用，错锚点会先丢掉证据",
+      "finding": "论文将检索拆成原生关系限定范围与域内语义排序，并直接展示自动锚点错误造成的召回退化。",
+      "relevance": "适合检查已有章节、会话和记录顺序的知识库，尤其是带明确位置关系的问题。",
+      "action": "先测锚点与候选范围是否保留正确证据，再决定要不要硬过滤；保留全域检索作为对照。",
+      "caveat": "小规模受控、事后条件分析，不能当通用RAG胜率；未证明端到端问答或效率收益。",
+      "recency_label": "近期补充 · 本期首次收录",
+      "source_date": "2026-10-08",
+      "category": "知识库 / RAG",
+      "sources": [
+        {
+          "title": "NativeScope：arXiv摘要与提交历史",
+          "url": "https://arxiv.org/abs/2610.12243"
+        },
+        {
+          "title": "NativeScope v1全文",
+          "url": "https://arxiv.org/html/2610.12243v1"
+        }
+      ],
+      "detail_id": "nativescope-2610-12243",
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-10/nativescope-2610-12243.md"
+    },
+    {
+      "id": "fresco-plus-plus",
+      "title": "Fresco++：头部 Avatar 的跨视角共识训练",
+      "category": "数字人 / 几何",
+      "finding": "新视角PSNR相对Fresco从31.80升至32.18 dB；新增规范空间局部对应与可靠多视角特征共识。",
+      "relevance": "可参考其跨视角监督设计，但目前仅有渲染质量证据，未验证固定表情GS渲染图经摄影测量后的Mesh精度。",
+      "action": "列入训练研究观察；当前保轮廓Mesh路线维持独立几何验收，不据此更换方案。",
+      "caveat": "需要改训练。暂无已核实的Fresco++官方代码发布；数据为论文自报，未复现。",
+      "recency_label": "近期补充·首次收录",
+      "source_date": "2026-10-08提交；2026-10-09公告（早于上期核查）",
+      "submitted_at": "2026-10-08T07:43:20Z",
+      "announcement_date": "2026-10-09",
+      "before_previous_check": true,
+      "sources": [
+        {
+          "title": "Fresco++ arXiv v1与提交记录",
+          "url": "https://arxiv.org/abs/2610.11412"
+        },
+        {
+          "title": "Fresco++ HTML主文",
+          "url": "https://arxiv.org/html/2610.11412v1"
+        },
+        {
+          "title": "arXiv cs.CV 10月9日公告目录",
+          "url": "https://arxiv.org/list/cs.CV/recent?show=2000&skip=0"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-10/fresco-plus-plus.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "采集 / 工具",
+      "status": "本次核查无可信新增，不重复旧版本",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "MarkItDown releases",
+          "url": "https://github.com/microsoft/markitdown/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "未核实到上期后新的保轮廓摄影测量能力；Fresco++仅近期研究补充",
+      "sources": [
+        {
+          "title": "OpenMVS releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "动态工作流统一收于大模型前沿用法，不重复生成条目",
+      "sources": []
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "Claude有10月9日明确发布；OpenAI未核实到10月9日新使用机制",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        }
+      ]
+    }
+  ]
+}
