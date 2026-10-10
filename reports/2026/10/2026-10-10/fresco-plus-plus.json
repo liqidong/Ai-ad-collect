@@ -1,0 +1,74 @@
+{
+  "id": "fresco-plus-plus",
+  "title": "Fresco++：用规范空间共识改善头部 Avatar 的跨视角细节",
+  "problem": "逐视角拟合容易过早学到高频伪影，同一面部区域随视角变化也可能不一致。",
+  "inputs": "同步多视角视频、标定相机、前景与面部分割，以及可对应的规范头部结构；本文预处理还用 Metashape 深度辅助遮挡判断。",
+  "outputs": "训练后的可驱动头部 Avatar 及新视角图像；没有给出高精度 Mesh 导出的验证。",
+  "pipeline": [
+    {
+      "title": "先稳定粗结构",
+      "explanation": "预热后以高斯低通图像的 L1 损失约束低频结构。"
+    },
+    {
+      "title": "再学习细节",
+      "explanation": "后期引入边缘加权 DoG 带通误差与梯度差异，逐步加强皱纹、发丝和边界监督。"
+    },
+    {
+      "title": "建立规范对应",
+      "explanation": "以同一规范三角面身份连接同步视角，投影其中心，筛除前景、朝向和深度不可靠的局部观测。"
+    },
+    {
+      "title": "形成共识监督",
+      "explanation": "冻结 VGG-16，平均当前与辅助视角真实图块的特征作为目标，只反传当前渲染分支，免去辅助视角渲染。"
+    }
+  ],
+  "mechanism": "频率调度控制何时学细节；Canonical Group Consensus 控制对应哪些区域及哪些观测可信。它是训练策略，保留原 Avatar 的变形和推理管线。",
+  "results": [
+    {
+      "claim": "新视角渲染优于前版 Fresco",
+      "evidence": "表I：NeRSemble 八名受试者，15视角训练、1视角留出：PSNR 31.80→32.18 dB，LPIPS 0.058→0.056。",
+      "source": "https://arxiv.org/html/2610.11412v1"
+    },
+    {
+      "claim": "CGC 与频率课程均有贡献",
+      "evidence": "表II：同一基线的新视角 PSNR 为30.79，加入CGC为31.50，完整方案32.18。",
+      "source": "https://arxiv.org/html/2610.11412v1"
+    },
+    {
+      "claim": "可迁移，但增加训练成本",
+      "evidence": "表IV、V：GaussianAvatars 加入后 PSNR 31.50→31.92，训练7.39→10.90小时；推理约6毫秒/帧。",
+      "source": "https://arxiv.org/html/2610.11412v1"
+    }
+  ],
+  "limitations": [
+    "主要评估图像质量；不能把 PSNR、LPIPS 的收益等同于轮廓或 Mesh 几何精度提升。",
+    "依赖同步多视角与可信规范对应；对固定表情 GS 渲染图再摄影测量的路线尚无实验。",
+    "跨身份驱动只有定性评价；训练成本上升，文中未给出已发布的 Fresco++ 官方代码链接。"
+  ],
+  "engineering_notes": [
+    "研究观察：若未来重新训练头部Avatar，可将共识监督作为独立消融；目前不要把它包装成摄影测量后处理工具。",
+    "对当前工程路线，先固定同一GS、表情、相机轨迹、图像与遮罩，再比较Mesh侧脸轮廓、鼻翼/唇缘、深度和法线误差；这属于建议的验收设计，不是论文已验证结论。",
+    "论文中的Metashape用于真实视频的预处理深度，不构成“GS渲染图→Metashape→高精度Mesh”有效性的证据。"
+  ],
+  "sources": [
+    {
+      "title": "Fresco++ arXiv v1与提交记录",
+      "url": "https://arxiv.org/abs/2610.11412"
+    },
+    {
+      "title": "Fresco++ HTML主文",
+      "url": "https://arxiv.org/html/2610.11412v1"
+    },
+    {
+      "title": "arXiv cs.CV 10月9日公告目录",
+      "url": "https://arxiv.org/list/cs.CV/recent?show=2000&skip=0"
+    }
+  ],
+  "read_scope": "已阅读HTML主文的方法III-A至III-D、实验IV-A至IV-D、表I–V与局限V，并核对提交记录。未运行代码，未查看独立补充视频；不声称已完成复现。",
+  "source_date": "2026-10-08",
+  "submitted_at": "2026-10-08T07:43:20Z",
+  "announcement_date": "2026-10-09",
+  "before_previous_check": true,
+  "previous_check_at": "2026-10-09T08:03:40Z",
+  "recency_label": "近期补充·首次收录"
+}
