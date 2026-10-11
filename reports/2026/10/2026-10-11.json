@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-11",
+  "title": "AI 工程研究日报",
+  "edition_label": "增量核查 / 本期无新增重点条目",
+  "summary": "本期未核实到适合新增详解的重点论文或大模型使用机制，不以旧内容补数量。COLMAP 出现数值稳定性维护提交，作为工程记录保留，不能据此推断 Mesh 精度提升。",
+  "notice": "对照2026-10-10期（核查时点2026-10-10T00:03:36Z）去重。本期0条新增重点内容；既有详解保留在历史日期。无新增仅指本次所列公开原始来源核查范围，不代表全网没有新进展。未运行新代码或复现实验，维护者陈述与本文工程判断分开记录。",
+  "verified_at": "2026-10-11T00:05:06Z",
+  "items": [],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "未核实到可收录的新使用机制。OpenAI API日志可见最新条目仍为10月8日；Claude平台10月9日dynamic workflows已在上期收录。",
+      "source_date": "2026-10-08；2026-10-09",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "未收录新的重点条目。Codex 0.163.0-alpha.5（10月10日00:26 UTC）属于窗口内预发布，但官方说明仅给版本号，不能据此推断新增能力。Copilot JetBrains的10月10日控制项/聊天维护更新保留为核查记录，不上升为新算法结论。",
+      "source_date": "2026-10-10",
+      "sources": [
+        {
+          "title": "Codex 0.163.0-alpha.5预发布",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.163.0-alpha.5"
+        },
+        {
+          "title": "Copilot for JetBrains官方更新",
+          "url": "https://github.blog/changelog/2026-10-10-new-controls-and-chat-improvements-in-copilot-for-jetbrains/"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "未发现需新增详解的可靠变化。arXiv cs.IR、cs.CL、cs.AI recent可见最新批次仍为10月9日；NativeScope已在上期收录。此处核对更新目录和候选，不声称重新研读所有论文全文。",
+      "source_date": "2026-10-09",
+      "sources": [
+        {
+          "title": "arXiv cs.IR recent",
+          "url": "https://arxiv.org/list/cs.IR/recent"
+        },
+        {
+          "title": "arXiv cs.CL recent",
+          "url": "https://arxiv.org/list/cs.CL/recent"
+        },
+        {
+          "title": "arXiv cs.AI recent",
+          "url": "https://arxiv.org/list/cs.AI/recent"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "无新增重点算法。arXiv cs.CV/cs.GR最新公告仍为10月9日；OpenMVS、APDe-MVS与MGAvatar未见窗口内新增。COLMAP于10月10日21:41:23 UTC提交极小旋转角Jacobian的数值稳定性修正；维护记录报告Windows 67项测试通过，未提供重建数据集精度或性能验证。工程建议：关注后续正式版本和针对性回归，不仅凭此提交更换已验证环境。",
+      "source_date": "COLMAP提交：2026-10-10；arXiv最新公告：2026-10-09",
+      "sources": [
+        {
+          "title": "COLMAP数值稳定性修正c60355a",
+          "url": "https://github.com/colmap/colmap/commit/c60355a1896a20c1a53890df37491a77f8d13e6f"
+        },
+        {
+          "title": "arXiv cs.CV new",
+          "url": "https://arxiv.org/list/cs.CV/new"
+        },
+        {
+          "title": "arXiv cs.GR new",
+          "url": "https://arxiv.org/list/cs.GR/new"
+        },
+        {
+          "title": "OpenMVS releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        },
+        {
+          "title": "APDe-MVS最新核查提交",
+          "url": "https://github.com/whoiszzj/APDe-MVS/commit/7c7ce3dda39cf11dbcca11546dabeb95e387c815"
+        },
+        {
+          "title": "MGAvatar最新核查提交",
+          "url": "https://github.com/bnbucv/MGAvatar/commit/0f0a8c978f9fa62a535315cbe693d8ce57251711"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "无可信新增。Crawl4AI仍为0.9.4（9月23日），MarkItDown仍为0.1.8（9月21日）；核查main最新提交分别为10月5日和10月4日。不重复前期版本详解，不将一般采集能力等同于对任意网站的访问授权。",
+      "source_date": "2026-09-23；2026-09-21",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "MarkItDown releases",
+          "url": "https://github.com/microsoft/markitdown/releases"
+        }
+      ]
+    }
+  ]
+}
