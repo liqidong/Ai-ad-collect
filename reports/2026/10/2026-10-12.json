@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-12",
+  "title": "AI 工程研究日报",
+  "edition_label": "工程增量 / COLMAP 模型读回与裁剪修复",
+  "summary": "本期聚焦 COLMAP 开发分支的两项数据一致性修复：重复读取模型时清理旧状态，裁剪时保留已有点的重投影误差。它们有助于特定批处理与质量检查流程，不代表人脸 Mesh 精度提升。",
+  "notice": "对照2026-10-11期去重。收录1篇代码修复详解；其他方向未核实到本期应收录的新进展，不以旧版本或转载凑数。源码变化、维护者回归证据与工程建议分别说明；未独立编译或运行，开发分支提交不等于正式版发布。",
+  "verified_at": "2026-10-12T00:09:12Z",
+  "items": [
+    {
+      "id": "colmap-reconstruction-state-crop-20261011",
+      "category": "数字人 / 几何",
+      "title": "COLMAP 开发分支：模型状态重置与裁剪误差保留修复",
+      "finding": "10 月 11 日合入 main 的两项修复：复用 Reconstruction 读取替换模型时，清空旧注册帧、注册图像计数与最大点 ID；Crop() 重建保留点时复制其重投影误差，避免已知误差退回“未知”。",
+      "relevance": "条件相关：若固定 GS 渲染图→摄影测量脚本复用 pycolmap 对象，或用 crop/model_cropper/model_splitter 后继续检查重投影误差，这两项值得加入回归。它们维护模型状态与误差元数据，没有改变 GS、MVS 或轮廓重建算法。",
+      "action": "先检查是否命中上述调用。命中时，在测试环境核对两条提交或后续包含它们的正式版，并运行“同一对象换读模型”和“裁剪保留误差”最小回归；普通单次读模且不裁剪的流程无需因此重跑全部重建。",
+      "caveat": "截至核查仅确认 main 已合入；最新软件 release 仍为 4.2.1（9 月 29 日）。未独立编译或跑用户数据；没有几何质量、保轮廓、速度提升的实测证据。CLI model_cropper/model_splitter 也调用 Crop，不能把裁剪修复范围仅限于 Python API。",
+      "recency_label": "新增工程修复 · 开发分支",
+      "source_date": "2026-10-11（UTC；09:24 / 14:52 合入）",
+      "sources": [
+        {
+          "title": "COLMAP #4842：替换模型时重置状态",
+          "url": "https://github.com/colmap/colmap/commit/826a1e55a80bca5720e46c8452f738700552875e"
+        },
+        {
+          "title": "COLMAP #4846：Crop 保留点的重投影误差",
+          "url": "https://github.com/colmap/colmap/commit/c0a195a1cc5cc463341015401e8a1624744fec4f"
+        },
+        {
+          "title": "COLMAP Releases",
+          "url": "https://github.com/colmap/colmap/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-12/colmap-reconstruction-state-crop-20261011.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "无本期可信新增：OpenAI API日志最新可见10月8日，ChatGPT/Codex更新页最新10月9日；Claude平台最新10月9日dynamic workflows已收录。",
+      "source_date": "2026-10-08；2026-10-09",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "ChatGPT release notes",
+          "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "未收录新的重点能力。Codex正式版0.162.1、alpha.5及10月10日Copilot JetBrains维护均在前期窗口。Cloudflare 10月10日Skills over MCP也早于本期窗口，不作今日新发布。",
+      "source_date": "2026-10-09；2026-10-10",
+      "sources": [
+        {
+          "title": "Codex releases",
+          "url": "https://github.com/openai/codex/releases"
+        },
+        {
+          "title": "GitHub changelog",
+          "url": "https://github.blog/changelog/"
+        },
+        {
+          "title": "Cloudflare changelog",
+          "url": "https://developers.cloudflare.com/changelog/"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "所查发布页未见本期新增：Crawl4AI0.9.4与MarkItDown0.1.8仍为前期版本；Firecrawl最新可见公告10月8日，Crawlee最近预发布10月6日，Scrapy正式版9月10日。Zyte发布说明抓取未成功，不将该来源记作已确认无更新。",
+      "source_date": "2026-09-10至2026-10-08（各来源最新可见条目）",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "MarkItDown releases",
+          "url": "https://github.com/microsoft/markitdown/releases"
+        },
+        {
+          "title": "Firecrawl changelog",
+          "url": "https://www.firecrawl.dev/changelog"
+        },
+        {
+          "title": "Crawlee releases",
+          "url": "https://github.com/apify/crawlee/releases"
+        },
+        {
+          "title": "Scrapy releases",
+          "url": "https://github.com/scrapy/scrapy/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "未核实到本期新方法。10月11日出现的IndexRAG报道对应3月17日首发、9月28日修订的旧论文，不重新包装为新进展。LangChain与LlamaIndex博客最新有日期条目分别为10月9日与10月8日，arXiv cs.AI/cs.IR最新批次仍为10月9日。此次为发布与版本筛查，不声称重读所有历史论文。",
+      "source_date": "IndexRAG：2026-03-17首发，2026-09-28 v2；其余索引最新2026-10-08/09",
+      "sources": [
+        {
+          "title": "IndexRAG原始版本记录",
+          "url": "https://arxiv.org/abs/2603.16415"
+        },
+        {
+          "title": "LangChain官方博客",
+          "url": "https://www.langchain.com/blog"
+        },
+        {
+          "title": "LlamaIndex官方博客",
+          "url": "https://www.llamaindex.ai/blog"
+        },
+        {
+          "title": "arXiv cs.IR recent",
+          "url": "https://arxiv.org/list/cs.IR/recent"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "本窗口确认 1 条可合并的 COLMAP 开发分支工程修复；数字人/人脸几何/静态 Mesh 未核到应新增的重要论文或所跟踪方法代码更新，不重复已收方法。 使用公开原始 arXiv 页面及官方仓库默认分支/项目页、release 记录；不是对所有 GitHub 分支或全球新仓库的穷举。未独立运行任何算法。",
+      "source_date": "2026-10-11（COLMAP 修复）；其余为各来源既有版本",
+      "sources": [
+        {
+          "title": "cs.CV new",
+          "url": "https://arxiv.org/list/cs.CV/new"
+        },
+        {
+          "title": "cs.GR new",
+          "url": "https://arxiv.org/list/cs.GR/new"
+        },
+        {
+          "title": "MGAvatar arXiv",
+          "url": "https://arxiv.org/abs/2609.12850"
+        },
+        {
+          "title": "MGAvatar 最新提交",
+          "url": "https://github.com/bnbucv/MGAvatar/commit/0f0a8c978f9fa62a535315cbe693d8ce57251711"
+        },
+        {
+          "title": "Fresco++ arXiv",
+          "url": "https://arxiv.org/abs/2610.11412"
+        },
+        {
+          "title": "Fresco 仓库",
+          "url": "https://github.com/saralkun/Fresco"
+        },
+        {
+          "title": "ProgressiveAvatars arXiv",
+          "url": "https://arxiv.org/abs/2603.16447"
+        },
+        {
+          "title": "官方项目页源码",
+          "url": "https://github.com/USTC3DV/ustc3dv.github.io/blob/main/ProgressiveAvatars/index.html"
+        },
+        {
+          "title": "项目页最后提交",
+          "url": "https://github.com/USTC3DV/ustc3dv.github.io/commit/26dbb8c0530f21b5703e7bb893bec7a3b56f07fc"
+        },
+        {
+          "title": "2D-SuGaR 最新提交",
+          "url": "https://github.com/prajwalcr/2d-sugar/commit/e62770ec6ab50076ebb6c0e3b4ac39f777f14d27"
+        },
+        {
+          "title": "PCAsplat arXiv",
+          "url": "https://arxiv.org/abs/2610.11011"
+        },
+        {
+          "title": "OpenMVS 最新提交",
+          "url": "https://github.com/cdcseacave/openMVS/commit/a3b6d0d99800a65af6b5f6b20dcc1df4c9e0e0c4"
+        },
+        {
+          "title": "APDe-MVS 最新提交",
+          "url": "https://github.com/whoiszzj/APDe-MVS/commit/7c7ce3dda39cf11dbcca11546dabeb95e387c815"
+        },
+        {
+          "title": "COLMAP 默认分支提交",
+          "url": "https://github.com/colmap/colmap/commits/main/"
+        }
+      ]
+    }
+  ]
+}
