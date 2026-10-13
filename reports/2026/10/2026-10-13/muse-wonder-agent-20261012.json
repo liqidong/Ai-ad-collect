@@ -1,0 +1,125 @@
+{
+  "id": "muse-wonder-agent-20261012",
+  "title": "Muse Wonder 长任务代理接入：可复用的接口、续接机制与执行边界",
+  "problem": "长任务代理的难点包括遗忘早期约束、工具失败后放弃，以及多轮调用丢失中间状态。10/12的新增是Muse Wonder模型可接入Meta现有代理接口，官方称其训练强调Active Memory与Active Focus。不能把既有Responses API、fan-out或工作流框架重新算作当天发明，也不能把模型能力描述理解成自动提供完整代理服务。",
+  "inputs": "任务说明、已授权的文本/文件/截图等上下文、工具定义、执行器以及明确验收条件。官方模型目录列出文本、图像、视频、音频和PDF输入；首轮验证建议只用脱敏文本和只读工具。需要已获服务开放且支持计费的Meta Model API账号及密钥；密钥由调用者安全配置，不写进代码或报告。",
+  "outputs": "模型返回文本、工具调用及可回放的加密推理项；真正的文件变更、搜索或测试结果由所接工具或Muse Code产生。最终产物应附可检查的测试/来源证据。本次只核读公开资料和作者代码，没有调用付费模型，也没有复现完成率或成本收益。",
+  "pipeline": [
+    {
+      "title": "1. 先验证资格与模型权限",
+      "explanation": "官方地理政策于2026-10-12更新：中国大陆、香港和澳门均列为Restricted Territories，也限制向这些地区终端用户提供集成服务，并禁止绕过地域控制。符合条件的账号先调用GET /v1/models，检查本团队是否返回muse-wonder-1.0；公开公告不代表每个账号都已启用。"
+    },
+    {
+      "title": "2. 接入Wonder，明确Full不是推理档位",
+      "explanation": "用OpenAI兼容客户端，base_url设为https://api.meta.ai/v1，选择muse-wonder-1.0。官方说明Wonder与Spark接受相同请求，可沿用既有示例替换模型名；文档仍标Preview。Full没有公开按量API入口，仅Muse Code Power Usage或Maximum Usage计划提供；把Wonder的effort设为max不会切换成Full。"
+    },
+    {
+      "title": "3. 给多轮流程选对续接方式",
+      "explanation": "优先用Responses API。可用previous_response_id让服务端拼接历史；若自行持有历史，则设store:false并请求include:[\"reasoning.encrypted_content\"]，下一轮原样回放所需reasoning项及相关对话。加密内容不可编辑或当普通摘要读取。这是已公开的推理状态机制，不等于论文已公开Active Memory的完整存储检索实现。"
+    },
+    {
+      "title": "4. 执行工具并返回逐项结果",
+      "explanation": "为只读查询、测试等工具定义schema。模型输出function_call后由应用验证参数、权限并执行，再以相同call_id返回function_call_output。客户端工具不会由模型服务替你执行。先把任务限制为一个可验证的小闭环，再逐步接入写操作；副作用须有外部权限和人工检查。"
+    },
+    {
+      "title": "5. 用可失败的任务验证长程行为",
+      "explanation": "建议在相同材料、工具、预算与验收下对照原模型：中途更正一个需求，注入一次受控工具错误，检查它是否保留最新约束、恢复执行并提供测试证据。记录成功率、重试次数、耗时与token费用；这是建议实验，不是本文已跑结果。不要只比较一次聊天答案或引用厂商排名。"
+    }
+  ],
+  "mechanism": "公开机制有三层。模型层：Meta称扩大基础模型并结合预训练、强化学习和多样长任务训练，改善新任务泛化、跨轮相关信息使用及遇阻继续工作的行为；未披露Active Memory/Focus可复现算法、消融或独立存储API。协议层：Responses通过服务端历史或不透明加密推理项保持多轮连续性，开发者仍负责历史管理。执行层：外部harness负责工具、隔离、授权与验收。因而可落地增量是给已有长任务闭环增加一个可替换模型，而不是无需工程控制就能得到永久记忆与可靠执行。",
+  "results": [
+    {
+      "claim": "已有明确的公开调用契约，尚无本账号可用性实测。",
+      "evidence": "开发文档列出muse-wonder-1.0、https://api.meta.ai/v1、1,048,576 token窗口和Preview状态；模型目录提供/v1/models以查询团队已启用项。",
+      "source": "https://dev.meta.ai/docs/overview"
+    },
+    {
+      "claim": "跨轮推理续接可按公开协议实现，接口选错会丢失这一状态。",
+      "evidence": "Reasoning文档说明Responses支持previous_response_id或加密内容回放；外部调用者的Chat Completions不能通过reasoning_content延续内部推理。作者notebook包含两种Responses续接示例。",
+      "source": "https://dev.meta.ai/docs/reasoning"
+    },
+    {
+      "claim": "官方记忆和持续执行证据需要按评测范围理解。",
+      "evidence": "模型卡的MemoryBench为内部64K–100K多轮事实记忆测试；FocusBench也是内部评测。SWE-Marathon使用不同agent产品/执行框架，官方注明并非统一harness控制比较。本文不据此声称生产长期记忆已解决。",
+      "source": "https://research.meta.ai/static/muse-wonder-model-card"
+    }
+  ],
+  "limitations": [
+    "地域与可用性：以2026-10-12官方地域政策和实际账号权限为准；中国大陆、香港、澳门受限，不提供绕过建议。公开文档未给出所有账号的实时开放清单。",
+    "消费者开放：Muse应用中的Wonder体验官方写的是将推出、优先订阅者；不能表述为消费者已全面可用。",
+    "隐私与计费：Muse Code订阅默认Contributor，以更多用量交换允许Meta训练；可随时关闭，关闭后的未来内容不用于训练，重新开启除外。Wonder按量API仅Standard，内容不用于训练。不要把订阅默认扩大到所有API调用。",
+    "Active Memory/Focus的内部算法、独立持久化接口和可靠性保证未公开；模型仍可能在多步推理、视觉空间及部分语言上出错。",
+    "模型官方成绩不等于本任务实测；本次没有生成补丁、跑代理、测延迟或计算实际省费幅度。"
+  ],
+  "engineering_notes": [
+    "最小请求仅供符合开放条件的开发者自行验证：POST https://api.meta.ai/v1/responses；JSON为{\"model\":\"muse-wonder-1.0\",\"input\":\"请列出任务约束，并说明还缺什么信息。\",\"reasoning\":{\"effort\":\"high\"},\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}。鉴权由安全环境中的MODEL_API_KEY提供。此请求未执行。",
+    "Responses的instructions只作用于当前请求，链式调用时每轮重发。模型服务不自动压缩历史：truncation:auto会报400；接近窗口时按完整轮次压缩，自行计数，保留的加密项须完整回放。",
+    "工具兼容坑：tool_choice目前只支持auto；strict:true只验证工具schema，不应误认为执行授权或业务参数已安全。max_tool_calls限制内建工具，不能代替客户端循环的轮数/预算上限。",
+    "成本：Wonder按量API每百万token输入4美元、缓存输入0.20美元、输出20美元；无长上下文加价，推理token计入输出。团队级限流与密钥共享，仍需按实际响应限流头控制并发。",
+    "作者代码已核到2026-09-02的reasoning notebook，默认仍muse-spark-1.3，部分说明仍称xhigh等同high；当前Reasoning文档已列max。可复用续接结构，参数支持应以当前Wonder文档和最小调用验证为准。旧notebook不构成10/12新功能证据。",
+    "已有Muse Code fan-out可用独立git worktree隔离写入，但该机制早于此次模型发布；本条只把它视为可承载Wonder的既有执行框架，不另列新成果。"
+  ],
+  "sources": [
+    {
+      "title": "Meta 官方发布：Muse Wonder / Wonder Full（2026-10-12）",
+      "url": "https://about.fb.com/news/2026/10/introducing-muse-wonder-models/"
+    },
+    {
+      "title": "Meta 研究说明：Active Memory、Active Focus 与训练方向",
+      "url": "https://research.meta.ai/blog/muse-wonder"
+    },
+    {
+      "title": "Meta 开发文档：接入地址、模型名、Preview 与兼容方式",
+      "url": "https://dev.meta.ai/docs/overview"
+    },
+    {
+      "title": "模型目录：Wonder / Full 的开放条件与账号可用模型查询",
+      "url": "https://dev.meta.ai/docs/models"
+    },
+    {
+      "title": "Responses API：状态续接、加密推理回放及压缩约束",
+      "url": "https://dev.meta.ai/docs/protocols/responses"
+    },
+    {
+      "title": "Reasoning：推理预算与不同接口的续接差异",
+      "url": "https://dev.meta.ai/docs/reasoning"
+    },
+    {
+      "title": "Tool calling：客户端执行责任与调用限制",
+      "url": "https://dev.meta.ai/docs/tool-calling"
+    },
+    {
+      "title": "官方地域政策（最后更新2026-10-12）",
+      "url": "https://dev.meta.ai/legal/geographic-use-policy"
+    },
+    {
+      "title": "Muse Code 订阅：默认 Contributor、关闭后未来内容处理",
+      "url": "https://dev.meta.ai/docs/muse-code/subscriptions"
+    },
+    {
+      "title": "API 价格与团队限流",
+      "url": "https://dev.meta.ai/docs/pricing-rate-limits"
+    },
+    {
+      "title": "Muse Wonder 模型卡（13页）",
+      "url": "https://research.meta.ai/static/muse-wonder-model-card"
+    },
+    {
+      "title": "官方作者代码：推理续接 notebook，固定至2026-09-02提交",
+      "url": "https://github.com/meta-models/meta-model-cookbook/blob/70013b7a97d03f1983a157011e91c7bb596d5d8e/01_api_fundamentals/06_reasoning_tokens.ipynb"
+    },
+    {
+      "title": "官方 Quickstart：Responses API 的最小调用",
+      "url": "https://dev.meta.ai/docs/quickstart"
+    },
+    {
+      "title": "支持地区帮助页：必须同时支持服务与计费",
+      "url": "https://dev.meta.ai/help/accounts-and-login/supported-countries"
+    },
+    {
+      "title": "既有Muse Code执行框架：隔离worktree的subagent fan-out",
+      "url": "https://dev.meta.ai/docs/cookbook/subagent-fanout"
+    }
+  ],
+  "read_scope": "阅读2026-10-12官方新闻和研究稿正文；阅读模型目录、总览、Quickstart、订阅、价格、地域政策与支持地区帮助页；重点核读Responses的多轮/回放/压缩段、Reasoning的effort与接口差异段、Tool calling的执行与限制段。模型卡读取13页PDF文本层，使用评测方法与限制说明，未引用仅图表中的成绩。通过官方GitHub读取reasoning notebook源码并核到最后改动提交70013b7（2026-09-02）；没有运行代码、登录账号、生成密钥或调用模型。核查截至2026-10-13T00:00:23Z。"
+}
