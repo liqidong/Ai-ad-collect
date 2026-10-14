@@ -1,0 +1,387 @@
+{
+  "date": "2026-10-14",
+  "title": "AI 工程研究日报",
+  "edition_label": "上下文管理 / 代理轨迹检索 / 摄影测量更新",
+  "summary": "本期重点研读长任务代理的上下文处理、运行轨迹检索，以及摄影测量链路的新代码变化。逐项说明输入输出、使用前提和风险；发布方结果与工程建议分开，未独立复现实验。",
+  "notice": "对照2026-10-13期，优先收录上次核查后已确认的变化。开发分支合入不等于稳定版已发布，厂商演示不等于独立基准；其他方向无可信新增时不以旧技术填充。",
+  "verified_at": "2026-10-14T00:12:19Z",
+  "items": [
+    {
+      "id": "scaledown-agent-context",
+      "category": "大模型前沿用法",
+      "title": "ScaleDown接入长运行代理：把压缩、摘要和抽取拆成窄任务",
+      "finding": "10月13日LangChain公布ScaleDown中间件与Gateway接入。主模型继续规划和执行，专用模型负责历史摘要、按问题压缩工具输出及逐字抽取字段；源码还揭示不同接入方式的失败行为并不相同。",
+      "relevance": "适合长任务中反复读文档、日志或网页的代理。值得借鉴的是把上下文处理变成独立、可测的步骤，同时保留原文回读，而非追逐一个通用模型榜单。",
+      "action": "先在单个只读工具上验证按问题压缩：对同一批固定材料比较字段保真、任务完成率、总输入token和端到端延迟，再决定是否接入摘要；不要直接压缩含权限规则的整个system prompt。",
+      "caveat": "中间件开源不代表后端模型离线可用；实际内容会发往ScaleDown。摘要源码仍标private preview，现行文档注明输出上限200 tokens；官方大幅降本数字未经本次复现。",
+      "recency_label": "2026-10-13官方发布；日期级新增，未见精确发布时间",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "LangChain：Building Long-Running Agents with ScaleDown and Deep Agents（2026-10-13）",
+          "url": "https://www.langchain.com/blog/building-long-running-agents-with-scaledown-and-deep-agents"
+        },
+        {
+          "title": "LangChain：ScaleDown middleware integration",
+          "url": "https://docs.langchain.com/oss/python/integrations/middleware/scaledown"
+        },
+        {
+          "title": "ScaleDown作者实现：middleware.py",
+          "url": "https://github.com/scaledown-team/langchain-scaledown/blob/main/libs/scaledown/langchain_scaledown/middleware.py"
+        },
+        {
+          "title": "ScaleDown作者实现：summarizer.py",
+          "url": "https://github.com/scaledown-team/langchain-scaledown/blob/main/libs/scaledown/langchain_scaledown/summarizer.py"
+        },
+        {
+          "title": "ScaleDown：Extract overview",
+          "url": "https://docs.scaledown.ai/api-reference/extract-overview"
+        },
+        {
+          "title": "ScaleDown：Classify overview",
+          "url": "https://docs.scaledown.ai/api-reference/classify-overview"
+        },
+        {
+          "title": "作者包依赖与版本",
+          "url": "https://github.com/scaledown-team/langchain-scaledown/blob/main/libs/scaledown/pyproject.toml"
+        },
+        {
+          "title": "作者单元测试：summarizer错误与回退",
+          "url": "https://github.com/scaledown-team/langchain-scaledown/blob/main/libs/scaledown/tests/unit_tests/test_summarizer.py"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-14/scaledown-agent-context.md"
+    },
+    {
+      "id": "langsmith-ai-search",
+      "category": "智能体 / 应用",
+      "title": "LangSmith AI Search：直接检索代理行为，先理解它看不到什么",
+      "finding": "10月13日推出公开beta：先将重复trace整理为会话轨迹，再用快速决策模型逐条判断自然语言行为条件，并返回命中证据。它适合临时找失败样本，但默认8K上下文与主代理视角会形成明确盲区。",
+      "relevance": "把“任务说完成但实际上没做”“用户反复纠正”一类跨消息问题变成可查样本，比只按错误码筛日志更贴近代理质量；可用于建立回归集和人工复核队列。",
+      "action": "用一小组脱敏、人工标注的成功与失败对照会话测试召回；先加时间和版本过滤，再搜行为并核对证据。把只发生在子代理或长工具输出中的失败单独用完整trace验证。",
+      "caveat": "Cloud GCP US/EU/APAC区域beta、管理员启用、beta不额外收费；启用仍涉及向美国及LangChain分包商处理trace。不读取子代理、middleware、compaction内部消息，不适合当完整安全审计。",
+      "recency_label": "2026-10-13官方发布；日期级新增，未见精确发布时间",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "LangChain：Search agent traces by behavior with AI Search in LangSmith（2026-10-13）",
+          "url": "https://www.langchain.com/blog/agent-traces-ai-search-langsmith"
+        },
+        {
+          "title": "LangSmith官方操作文档：Search with AI、限制与数据处理条件",
+          "url": "https://docs.langchain.com/langsmith/filter-traces#search-with-ai"
+        },
+        {
+          "title": "LangSmith官方概念：Trajectories",
+          "url": "https://docs.langchain.com/langsmith/observability-concepts#trajectories"
+        },
+        {
+          "title": "LangSmith官方文档：Trajectory view integrations",
+          "url": "https://docs.langchain.com/langsmith/trajectory-view-integrations"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-14/langsmith-ai-search.md"
+    },
+    {
+      "id": "openmvs-refine-memory-20261013",
+      "category": "数字人 / 几何",
+      "title": "OpenMVS：精化降内存与贴图更新已合入，静态人脸先关自动分块",
+      "finding": "10月13日22:12Z，OpenMVS #1314正式合入develop：RefineMesh按需计算梯度、CPU带状统计及CUDA按参考视图累加；作者报告Truck显存8.85→6.86GB。贴图也更换视图选择与图集策略，新驱动默认按内存自动分块。",
+      "relevance": "直接落在“固定GS渲染多视图→摄影测量Mesh”的后端，有望缓解高分辨率/多视图精化内存瓶颈；没有人脸几何精度提升证据。",
+      "action": "保留当前生产基线，固定相机、渲染图、深度图和初始Mesh做小样本A/B；先关闭自动split，重点检查轮廓、鼻唇与眼睑ROI，并把贴图指标与几何误差分开。",
+      "caveat": "这是develop合入，仍需halfmesh0.5.1；稳定软件release仍v2.4.0。新分块不缝合边界，HJ8强制分2块的1cm F1由0.5225降至0.5133；预算模型不覆盖精化/全局贴图峰值。",
+      "recency_label": "窗口内新增 · develop已合入",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "OpenMVS #1314：45条提交合入 develop，含作者实验报告",
+          "url": "https://github.com/cdcseacave/openMVS/pull/1314"
+        },
+        {
+          "title": "合入提交 610562a4",
+          "url": "https://github.com/cdcseacave/openMVS/commit/610562a4f033be2aaf4f240512c93e1038186768"
+        },
+        {
+          "title": "MeshRefinement：精化机制、基准与几何漂移局限",
+          "url": "https://github.com/cdcseacave/openMVS/blob/610562a4f033be2aaf4f240512c93e1038186768/docs/design/MeshRefinement.md"
+        },
+        {
+          "title": "MeshTexturing：新视图选择与留出视图贴图评测",
+          "url": "https://github.com/cdcseacave/openMVS/blob/610562a4f033be2aaf4f240512c93e1038186768/docs/design/MeshTexturing.md"
+        },
+        {
+          "title": "SceneSplit：内存模型、无缝合合并与接缝退化",
+          "url": "https://github.com/cdcseacave/openMVS/blob/610562a4f033be2aaf4f240512c93e1038186768/docs/design/SceneSplit.md"
+        },
+        {
+          "title": "halfmesh 0.5.1 依赖发布",
+          "url": "https://github.com/cdcseacave/halfmesh/releases/tag/v0.5.1"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-14/openmvs-refine-memory-20261013.md"
+    },
+    {
+      "id": "colmap-clear-observations-20261013",
+      "category": "数字人 / 几何",
+      "title": "COLMAP：修复清点重三角化的残留观测计数",
+      "finding": "10月13日合入main的6db3867f修复清空/缩小2D观测后残留的3D关联计数：此前可能清点后仍报1000条观测、模型无效，并在重新建立track时抛异常。",
+      "relevance": "条件性影响已有模型clear_points后的已知位姿重三角化，适用于需要反复清点重建的GS渲染图摄影测量输入链。",
+      "action": "先确认脚本是否清点复用模型；若命中，用包含6db3867f的构建验证清点计数归零、模型有效和重三角化可完成。",
+      "caveat": "上游104项聚焦测试通过，但未跑完整重建或人脸数据；这是状态正确性修复，没有Mesh精度增益证据，也不代表当前稳定安装已更新。",
+      "recency_label": "窗口内新增 · main已合入",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "COLMAP #4853：清空/缩小观测后保持计数一致，已合入main",
+          "url": "https://github.com/colmap/colmap/pull/4853"
+        },
+        {
+          "title": "正式提交6db3867f：production与两组回归测试",
+          "url": "https://github.com/colmap/colmap/commit/6db3867f60771f34fa66d166dcc00fee7d5c6dc0"
+        },
+        {
+          "title": "Image::SetPoints2D与ResetPoint3DForPoint2D正式实现",
+          "url": "https://github.com/colmap/colmap/blob/6db3867f60771f34fa66d166dcc00fee7d5c6dc0/src/colmap/scene/image.cc"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-14/colmap-clear-observations-20261013.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "新增1条：ScaleDown上下文中间件。API changelog最新仍10/8 Ultrafast；ChatGPT release notes最新10/9 Composer predictions；ChatGPT & Codex changelog最新CLI0.162.1。另用官方GitHub release API核实0.162.1发布于2026-10-09T19:44:51Z。均早于本轮窗口且已核，不重报。10/13搜索命中活动页面未提供新增可实施机制，未当作产品发布。 Platform release notes最新仍10/9 dynamic workflows；Apps最新10/7；Claude Code官方release最新2.1.296，发布时间2026-10-09T19:28:59Z。News、Engineering、Research索引也已检查；Research最新10/12两条安全/政策内容不属于今日新增可部署用法，未重报。此结论只针对原生能力，不代表Anthropic没有合作新闻。",
+      "source_date": "ScaleDown 2026-10-13；OpenAI/Claude原生最新已见2026-10-08/09",
+      "sources": [
+        {
+          "title": "10/13官方发布",
+          "url": "https://www.langchain.com/blog/building-long-running-agents-with-scaledown-and-deep-agents"
+        },
+        {
+          "title": "官方集成文档",
+          "url": "https://docs.langchain.com/oss/python/integrations/middleware/scaledown"
+        },
+        {
+          "title": "作者源码",
+          "url": "https://github.com/scaledown-team/langchain-scaledown"
+        },
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "ChatGPT release notes",
+          "url": "https://help.openai.com/en/articles/6825453-chatgpt-release-notes"
+        },
+        {
+          "title": "ChatGPT & Codex changelog",
+          "url": "https://learn.chatgpt.com/docs/changelog"
+        },
+        {
+          "title": "Codex0.162.1官方release",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.162.1"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Claude Apps release notes",
+          "url": "https://support.claude.com/en/articles/12138966-release-notes"
+        },
+        {
+          "title": "Claude Code2.1.296官方release",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.296"
+        },
+        {
+          "title": "Anthropic News",
+          "url": "https://www.anthropic.com/news"
+        },
+        {
+          "title": "Anthropic Engineering",
+          "url": "https://www.anthropic.com/engineering"
+        },
+        {
+          "title": "Anthropic Research",
+          "url": "https://www.anthropic.com/research"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "新增1条：LangSmith行为检索公开beta。读官方发布、检索说明和trajectory文档后保留。公开beta地域、美国数据处理、子代理盲区、8K截断和不可保存AI查询视图均已明确。 Workday 10/13合作公告中Sana in Claude仅early access，Claude插件接入仍属计划；不当作已对全部用户开放。NVIDIA新教程可读，但技能已有，未核到窗口内新代码能力，不重复介绍旧技巧。",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "10/13官方发布",
+          "url": "https://www.langchain.com/blog/agent-traces-ai-search-langsmith"
+        },
+        {
+          "title": "操作及数据边界",
+          "url": "https://docs.langchain.com/langsmith/filter-traces#search-with-ai"
+        },
+        {
+          "title": "轨迹接入",
+          "url": "https://docs.langchain.com/langsmith/trajectory-view-integrations"
+        },
+        {
+          "title": "Workday与Anthropic官方合作公告",
+          "url": "https://investor.workday.com/news-and-events/press-releases/news-details/2026/Workday-and-Anthropic-Announce-New-Partnership-to-Connect-Reasoning-to-the-Rules-That-Run-the-Business-Wherever-People-Choose-to-Work/default.aspx"
+        },
+        {
+          "title": "NVIDIA10/13官方技术博客",
+          "url": "https://developer.nvidia.com/blog/rewrite-apache-spark-udfs-gpu-acceleration-ai-agents/"
+        },
+        {
+          "title": "cuDF Spark作者仓库",
+          "url": "https://github.com/NVIDIA/cudf-spark"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "无新增入选。核查时new页仍显示Monday, 12 October 2026，共18项；recent页最新日期也为10/12，未见比上一期新的公告批次。官方日程把10/12列为假日，正常公告在美东20:00；这里只记录实际读到的页面，不推断10/13或10/14一定没有论文，也不以搜索抓取日期充当首发时间。 本次读官方摘要页及Submission history：PRIME仍v1，2026-10-09 09:44:47 UTC；NativeScope仍v1，2026-10-08 16:21:51 UTC；IndexRAG最新仍v2，2026-09-28 02:56:42 UTC。没有新版本，均不重复。PRIME全文已在上一期阅读，本次没有重新声称全文细读。 RAGFlow nightly更新至10/13，但未逐提交证实新检索机制；LightRAG无新正式版。",
+      "source_date": "核查至2026-10-14；论文公告仍显示10/12，RAGFlow nightly 10/13",
+      "sources": [
+        {
+          "title": "arXiv cs.IR新公告",
+          "url": "https://arxiv.org/list/cs.IR/new"
+        },
+        {
+          "title": "arXiv cs.IR近期公告",
+          "url": "https://arxiv.org/list/cs.IR/recent"
+        },
+        {
+          "title": "arXiv公告时间及2026假日",
+          "url": "https://info.arxiv.org/help/availability.html"
+        },
+        {
+          "title": "PRIME版本记录",
+          "url": "https://arxiv.org/abs/2610.13296"
+        },
+        {
+          "title": "NativeScope版本记录",
+          "url": "https://arxiv.org/abs/2610.12243"
+        },
+        {
+          "title": "IndexRAG版本记录",
+          "url": "https://arxiv.org/abs/2603.16415"
+        },
+        {
+          "title": "RAGFlow releases与nightly正文",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        },
+        {
+          "title": "LightRAG releases",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "无新增重点条目。Docling仍2.138.0、Crawl4AI仍0.9.4、MarkItDown仍0.1.8；Firecrawl官方版本与产品更新未核到窗口内实质新变化。MinerU、Unstructured、Crawlee和Scrapy最新版本早于窗口。工具解析与安全功能不等于采集授权。",
+      "source_date": "Docling 2026-10-12；其余所核版本早于本窗口",
+      "sources": [
+        {
+          "title": "Docling releases",
+          "url": "https://github.com/docling-project/docling/releases"
+        },
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Crawl4AI security",
+          "url": "https://github.com/unclecode/crawl4ai/security"
+        },
+        {
+          "title": "MarkItDown releases",
+          "url": "https://github.com/microsoft/markitdown/releases"
+        },
+        {
+          "title": "Firecrawl releases",
+          "url": "https://github.com/firecrawl/firecrawl/releases"
+        },
+        {
+          "title": "Firecrawl官方产品更新",
+          "url": "https://www.firecrawl.dev/blog/category/product-updates"
+        },
+        {
+          "title": "Firecrawl官方changelog",
+          "url": "https://www.firecrawl.dev/changelog"
+        },
+        {
+          "title": "MinerU releases",
+          "url": "https://github.com/opendatalab/MinerU/releases"
+        },
+        {
+          "title": "MinerU 4.0.12",
+          "url": "https://github.com/opendatalab/MinerU/releases/tag/mineru-4.0.12-released"
+        },
+        {
+          "title": "Unstructured releases",
+          "url": "https://github.com/Unstructured-IO/unstructured/releases"
+        },
+        {
+          "title": "Unstructured 0.27.25",
+          "url": "https://github.com/Unstructured-IO/unstructured/releases/tag/0.27.25"
+        },
+        {
+          "title": "Crawlee releases",
+          "url": "https://github.com/apify/crawlee/releases"
+        },
+        {
+          "title": "Crawlee v4.0.0-rc.1",
+          "url": "https://github.com/apify/crawlee/releases/tag/v4.0.0-rc.1"
+        },
+        {
+          "title": "Scrapy 2.19.0",
+          "url": "https://github.com/scrapy/scrapy/releases/tag/2.19.0"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "确认2条窗口内主干/开发分支新增：OpenMVS #1314合入develop，精化内存/贴图/分块发生实质变化；COLMAP #4853合入main，修复清点重三角化残留计数。未证实新增的人脸几何精度突破；论文列表返回10/12日期，不能据此断言10/13全球无新论文。",
+      "source_date": "2026-10-13",
+      "sources": [
+        {
+          "title": "OpenMVS develop与#1314",
+          "url": "https://github.com/cdcseacave/openMVS/pull/1314"
+        },
+        {
+          "title": "OpenMVS正式软件releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        },
+        {
+          "title": "halfmesh 0.5.1",
+          "url": "https://github.com/cdcseacave/halfmesh/releases/tag/v0.5.1"
+        },
+        {
+          "title": "COLMAP main与#4853",
+          "url": "https://github.com/colmap/colmap/pull/4853"
+        },
+        {
+          "title": "COLMAP其他窗口内PR与状态",
+          "url": "https://github.com/colmap/colmap/pulls"
+        },
+        {
+          "title": "APDe-MVS",
+          "url": "https://github.com/whoiszzj/APDe-MVS/commit/7c7ce3dda39cf11dbcca11546dabeb95e387c815"
+        },
+        {
+          "title": "arXiv cs.CV new/recent/月表",
+          "url": "https://arxiv.org/list/cs.CV/new?skip=0&show=2000"
+        },
+        {
+          "title": "arXiv cs.GR new/recent",
+          "url": "https://arxiv.org/list/cs.GR/new"
+        },
+        {
+          "title": "公共网页日期定向检索",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        }
+      ]
+    }
+  ]
+}
