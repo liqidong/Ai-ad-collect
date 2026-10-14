@@ -1,0 +1,71 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-14
+---
+
+# LangSmith AI Search：直接检索代理行为，先理解它看不到什么
+
+来源日期：2026-10-13
+核查时点：2026-10-14T00:12:19Z（UTC）
+状态：公开来源研读草稿，未独立复现实验。
+
+## 核心问题
+代理质量问题经常不是一条报错：模型说任务完成，后面的工具结果却不支持；或者用户一直在纠正，但整段对话没有明确失败字段。只搜关键词容易把“真正完成”和“只说完成”混在一起，预先写好的评测器又不能覆盖每个临时问题。10月13日AI Search新增的是随问随查行为条件的能力，先定位值得人工读的会话，再把确认的问题留作回归样本。
+
+## 输入
+输入是已经采集进LangSmith的会话trace、你对行为的自然语言描述，以及时间、环境、版本、状态等结构化过滤条件。先确认thread_id正确串起同一会话；若用OpenAI Responses的previous_response_id串联调用，官方集成文档要求自行设置thread_id。主代理顶层run还要被正确标为root，否则会话投影可能不完整。
+
+## 输出
+输出是命中的thread、trace或run，而不是自动判定整个系统合规。界面显示匹配置信度；打开结果可跳到Trajectory中的命中消息并逐条看证据。建议把这些结果当待复核队列，真正进入评测集前仍对照原始tool结果和最终状态。无命中既可能表示条件不存在，也可能因为过滤、轨迹解析或证据没进入搜索视野。
+
+## 分步流程
+
+### 1. 先把重复执行日志整理成一次会话
+输入是一棵棵模型和工具调用树，其中历史会在多次模型请求中重复。SmithDB把它们投影成按首次出现顺序排列的消息列表，让用户消息、代理消息、工具调用和结果各出现一次。输出trajectory更适合读“事情如何发展”，而完整trace仍用于查嵌套调用、时延等执行细节。
+
+### 2. 用确定性条件缩小候选
+先限定时间和目标版本，再提出“代理声称完成，但没有支持结果”之类行为描述。结构化过滤负责状态、标签和metadata，AI描述负责会话含义；二者以AND组合。这样输出的是更小的候选集，避免模型花时间扫描不相关版本或把字段条件误当语言含义。
+
+### 3. 在有限预算里选择可读证据
+发布文描述每条轨迹使用8K token预算，优先放用户消息和对用户的回复，再放中间消息、工具结果及系统消息；保留下来的内容仍按原顺序送入模型。下一条放不下时会裁剪，后续可能被丢弃。这个机制省上下文，但“错误只藏在很长工具输出末尾”正是需要刻意测试的盲点。
+
+### 4. 决策模型逐条判断并流式返还
+每条候选轨迹与搜索描述一起交给快速决策模型判断，而不是只比较一个向量是否语义接近。系统批量并行判断，同时准备下一批数据，找到匹配就先返回。当前没有公布足以复现的召回率和端到端时延基准，所以应检验你的失败类型，不能从架构推导出“所有错误都能找全”。
+
+### 5. 打开证据，与完整trace对照
+对命中结果逐个看高亮消息和confidence，再核实模型认为“没完成”的原因。建议把误报、漏报和已确认问题分开标注，尤其放入“用户满意后离开”与“用户放弃后离开”的成对样本。输出应是一份人工确认的失败样本集，后续才能用于修改prompt或回归测试。
+
+## 关键机制
+改变的是搜索粒度：先把跨调用的会话变成去重轨迹，再用模型对“行为是否发生”做判断。其价值在发现没有现成错误码的交互模式。代价是trajectory只是trace的一个投影：官方元数据规则会隐藏middleware与compaction，子代理以外层动作呈现；AI Search文档进一步明确不读这些内部内容。因此要分别建立“主代理对话质量”与“完整执行正确性”的验证路径，不能把前者的检索结果外推为后者的保障。
+
+## 来源结果与证据
+
+### 已进入公开beta，具备可用入口和证据查看。
+10月13日官方发布及操作文档说明，LangSmith Cloud的GCP US、EU、APAC区域可由组织管理员开启，使用LangChain托管推理，无需另提供模型API key；发布文称beta不额外收费。
+来源：https://www.langchain.com/blog/agent-traces-ai-search-langsmith
+
+### 查漏边界比“语义搜索”四个字更重要。
+官方文档明确：不读取子代理/middleware/compaction内部消息；不以自然语言匹配run状态、名称或metadata；这些要走结构化过滤。
+来源：https://docs.langchain.com/langsmith/filter-traces#search-with-ai
+
+## 局限与未知
+- 管理员启用时需确认有权让组织trace传到美国，并由LangChain及其分包商处理。即便原workspace位于EU/APAC，也不能据此推定此功能遵守原区域驻留。文档禁止用于PHI，且不在现有BAA覆盖范围内。
+- 8K裁剪可能遗漏工具侧证据；主代理轨迹也不会覆盖子代理、middleware和compaction内部过程。完整执行审计仍应回到原始trace。
+- 搜索会受workspace速率限制。含AI Search的条件不能存为saved view，不进入Recents，描述也不包含在复制的页面URL里，不能只把链接当作可复现查询记录。
+- 置信度不是业务正确率保证；本次没有进入真实workspace启用、没有传输日志，也没有复现准确率或性能。
+
+## 工程建议（非复现结论）
+- 最小验证建议：人工准备三组成对会话：任务真正成功/仅口头声称成功；用户完成后离开/受挫放弃；主代理显式报错/错误只发生在子代理。对照搜索结果计算漏报与误报，并用完整trace解释每个漏报。
+- 测试材料先脱敏，记录搜索描述、时间范围、版本和所有结构化过滤条件。因为URL不会保存AI描述，要单独保存这份查询记录，否则同事点开链接无法复现。
+- 用结构化过滤定位tool error、模型版本或metadata；用AI Search补充跨消息行为模式。把确认的难例交给已有评测流程，别把“无搜索结果”写成“系统无风险”。
+
+## 实际阅读范围
+完整读取2026-10-13发布正文及官方filter-traces文档中的AI Search、限制、启用和数据处理说明；读取observability-concepts的trajectory定义与trajectory-view-integrations。未进入LangSmith组织、未启用功能、未调用模型；性能与检索效果未实测。
+
+## 原始来源
+- [LangChain：Search agent traces by behavior with AI Search in LangSmith（2026-10-13）](https://www.langchain.com/blog/agent-traces-ai-search-langsmith)
+- [LangSmith官方操作文档：Search with AI、限制与数据处理条件](https://docs.langchain.com/langsmith/filter-traces#search-with-ai)
+- [LangSmith官方概念：Trajectories](https://docs.langchain.com/langsmith/observability-concepts#trajectories)
+- [LangSmith官方文档：Trajectory view integrations](https://docs.langchain.com/langsmith/trajectory-view-integrations)
