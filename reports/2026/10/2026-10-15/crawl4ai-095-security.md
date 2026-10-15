@@ -1,0 +1,94 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-15
+---
+
+# Crawl4AI 0.9.5：升级前先分清Docker API与进程内SDK的边界
+
+来源日期：2026-10-14
+核查时点：2026-10-15T00:11:37Z（UTC）
+状态：公开来源研读草稿，未独立复现实验。
+
+## 核心问题
+浏览器流量受控，不代表爬虫的缓存、链接预览、robots.txt或配置解释路径也受控。0.9.5官方变更针对Docker服务器接收的不可信JSON请求，修补部分绕过统一出口和参数信任检查的路径，并收紧可消耗服务器资源的字段。
+
+## 输入
+主要输入是Docker HTTP服务收到的URL及CrawlerRunConfig等JSON配置，调用者可以请求缓存新鲜度校验、设置CSS选择器/等待条件和提取策略。运维侧提供认证、出口代理、TLS与资源上限配置。进程内Python调用默认被视为可信，不使用完全相同的字段限制。
+
+## 输出
+正常请求仍返回抓取结果；不可信请求中的新增禁止字段返回400，延时字段被限定，无法将浏览器绑定出口代理时拒绝执行。若显式开启深度爬取，还能返回受页数、深度及过滤器预算限制的多页结果。不能把“修了这些路径”解释为所有输入或全部部署方式已经安全。
+
+## 分步流程
+
+### 1. 在反序列化时标记不可信来源
+async_configs.py的Provenance.UNTRUSTED路径执行类型/字段检查。0.9.5禁止来自请求体的CosineStrategy.model_name、自定义正则及正则提取字段；脚本式wait_for被拒绝，普通值固定解释为CSS选择器，避免后续回退成脚本。
+
+### 2. 分离选择器数据与脚本代码
+async_crawler_strategy.py不再把css_selector拼进JavaScript字符串，而是把选择器作为evaluate的参数传入。这个变化既处理引号类合法选择器，也移除该字符串拼接入口。
+
+### 3. 缓存校验接入同一出口代理
+CacheValidator的httpx.AsyncClient现在使用proxy=proxy_url()。Docker启动时把PinningProxy注册给库内HTTP客户端，缓存的HEAD/GET于是进入相同出口策略；普通库调用未注册代理时proxy_url()为None，仍直接连接。
+
+### 4. TLS检查与强制出口真正生效
+删除默认启动列表中绕过证书检查的标志，让ignore_https_errors=False发挥作用；Docker的enforce_egress默认把TLS验证打开，除非运维显式开启不安全选项。在已注册出口代理的前提下，若将其注入浏览器proxy_config失败则抛EgressBlocked；若代理URL为空会跳过该分支，不能据此宣称未注册代理也必拒绝。Chromium sandbox仍需显式启用，不能说已默认开启。
+
+### 5. 限制资源字段，深爬按需启用
+不可信请求的三个延时字段上限60秒，负数、NaN和非数值回到默认值。Docker深爬默认关闭，只有运维设置CRAWL4AI_ALLOW_DEEP_CRAWL=true后才允许安全子集的BFS/DFS/BestFirst；config.yml控制页数与深度，默认100页/5层，且最多20个过滤器和评分器。
+
+## 关键机制
+这次修复以“谁提供了参数、哪一个HTTP客户端真正发起网络请求”为核心。配置门禁先拒绝可以触发脚本、模型加载或无界正则工作的字段，出口代理再覆盖缓存等浏览器外的请求；失败时拒绝执行避免静默降级。新增功能与安全修复同时交付，但深爬默认关闭，升级本身不等于允许扩大采集范围。
+
+## 来源结果与证据
+
+### 版本和分发已确认。
+GitHub官方release API显示v0.9.5发布于2026-10-14T10:25:39Z，非预发布。PyPI的0.9.5 wheel与源码包均存在、未撤回，要求Python>=3.10。
+来源：https://github.com/unclecode/crawl4ai/releases/tag/v0.9.5
+
+### Docker标签已经有发布物，不仅是release页的构建提示。
+Docker Hub官方tag API显示0.9.5为active，含linux/amd64与linux/arm64，最后推送2026-10-14T10:53:45.989159Z；索引digest为sha256:0b05666882bfb67f45d559a5b827839c54127b74aedd723f8ab338a3571b5fc9。本次未实际pull或启动镜像。
+来源：https://hub.docker.com/v2/repositories/unclecode/crawl4ai/tags/0.9.5
+
+### 公告列六项披露修复，源码与回归用例可对应。
+固定v0.9.5 CHANGELOG列出缓存SSRF、参数脚本注入、调用者指定HF模型、自定义正则DoS、无限延时和TLS标志问题。已查看cache_validator.py、async_configs.py、browser_manager.py及对应配置/出口/TLS测试；这证明修复意图与实现存在，不等于本次执行测试通过。
+来源：https://github.com/unclecode/crawl4ai/blob/v0.9.5/CHANGELOG.md
+
+### 兼容性变化主要在Docker请求边界。
+CHANGELOG明确：不可信请求提供model_name、自定义正则、正则schema字段或JavaScript wait_for现在返回400；进程内库用户不适用这组破坏性变更。SDK原有可信配置仍可能执行这些功能。
+来源：https://github.com/unclecode/crawl4ai/blob/v0.9.5/crawl4ai/async_configs.py
+
+## 局限与未知
+- 优先检查接受外部URL/JSON的自托管Docker服务。只更新pip库而自行编写HTTP封装，并不会自动注册Docker出口代理或使用UNTRUSTED来源校验。
+- 源码中BrowserConfig的ignore_https_errors默认仍为True。0.9.5修复了False选项被启动标志抵消的问题，不等于把所有SDK调用默认改成证书验证开启。
+- 任意HF模型加载导致代码执行的条件包括安装并使用PyTorch<2.6；官方说明默认Docker镜像没有PyTorch，不受这一项影响。不能把这个条件性问题说成每个默认容器都可代码执行。
+- Chromium sandbox是显式开关，默认未开启；出口、认证、网络隔离、最小权限、资源限制仍需部署方完整配置。
+- 官方安全公告链接在本次网页抓取中未成功展开；六项披露说明依据固定tag的官方CHANGELOG，并用相关tag源码交叉核对。没有本次独立测试通过率、性能收益或全面审计结论。
+- 抓取软件更安全不代表有权获取和保存所有内容。仍须限制在授权来源，遵守适用站点条款、许可、robots.txt与隐私要求，不绕过登录或访问控制。
+
+## 工程建议（非复现结论）
+- 工程建议，未执行：先盘点线上版本、Docker或SDK接入方式、是否接收不可信配置、是否额外安装Torch以及TLS配置，再确定影响范围。不要把普通库用户和API服务器混为一谈。
+- 最小试用：在隔离测试环境使用固定0.9.5镜像摘要；回放一组自有/获授权的普通网页、PDF与CSS等待任务，确认预期输出。对本来使用新禁用字段的任务先做迁移，核对400响应是否被上游正确处理。
+- 防御验证只用本地受控夹具与官方回归测试：检查缓存HTTP客户端是否走已注册代理、模拟已注册代理的proxy_config注入失败时是否拒绝执行、TLS开启时拒绝无效证书、正常CSS参数可用及延时上限。无需对第三方地址发送攻击样例。
+- 保持深爬关闭，确需开启时将域名白名单、100页/5层默认上限进一步按任务收紧，并保留失败和限额日志；不要将limits.max_pages设为0，因为配置注释中0代表不限制。
+- 部署生效条件：更换实际运行的旧容器/环境并重启，随后复查运行版本、镜像摘要和配置。仅下载包、拉镜像或更新requirements不能证明线上修复已生效。
+- 分发核查：release页仍保留“镜像构建中”的通用文本，GitHub workflow网页缓存不够新且API限流；本次以Docker Hub官方tag元数据验证镜像已发布，未冒称CI运行已核成功。
+
+## 实际阅读范围
+已读正式release及固定v0.9.5 CHANGELOG；通过官方raw源码读取配置反序列化、缓存验证、浏览器选择器与TLS、Docker启动和出口实现的相关代码，读取对应回归测试。已读GitHub release API、PyPI JSON与Docker Hub tag JSON。部分GitHub HTML页无法被网页工具展开，改用同一官方仓库raw内容；没有运行测试、安装软件、拉取镜像或访问第三方目标。
+
+## 原始来源
+- [Crawl4AI v0.9.5正式release](https://github.com/unclecode/crawl4ai/releases/tag/v0.9.5)
+- [固定v0.9.5的CHANGELOG：六项修复与兼容性变化](https://github.com/unclecode/crawl4ai/blob/v0.9.5/CHANGELOG.md)
+- [缓存校验实现：HTTP客户端接入已注册出口代理](https://github.com/unclecode/crawl4ai/blob/v0.9.5/crawl4ai/cache_validator.py)
+- [不可信配置校验：禁用字段、CSS等待和延时上限](https://github.com/unclecode/crawl4ai/blob/v0.9.5/crawl4ai/async_configs.py)
+- [Docker出口强制与失败时拒绝执行](https://github.com/unclecode/crawl4ai/blob/v0.9.5/deploy/docker/egress_broker.py)
+- [TLS和Chromium sandbox回归测试](https://github.com/unclecode/crawl4ai/blob/v0.9.5/tests/unit/test_browser_tls_sandbox_flags.py)
+- [不可信字段回归测试](https://github.com/unclecode/crawl4ai/blob/v0.9.5/tests/unit/test_untrusted_field_sinks.py)
+- [PyPI 0.9.5发布与安装要求](https://pypi.org/project/crawl4ai/0.9.5/)
+- [Docker Hub官方0.9.5标签元数据](https://hub.docker.com/v2/repositories/unclecode/crawl4ai/tags/0.9.5)
+- [源码：Docker启动时注册出口代理](https://github.com/unclecode/crawl4ai/blob/v0.9.5/deploy/docker/server.py)
+- [源码：进程内默认不设置出口代理](https://github.com/unclecode/crawl4ai/blob/v0.9.5/crawl4ai/egress_policy.py)
+- [源码：选择器作为evaluate参数](https://github.com/unclecode/crawl4ai/blob/v0.9.5/crawl4ai/async_crawler_strategy.py)
+- [配置：深爬页数及深度默认值](https://github.com/unclecode/crawl4ai/blob/v0.9.5/deploy/docker/config.yml)
+- [回归测试：缓存客户端出口代理](https://github.com/unclecode/crawl4ai/blob/v0.9.5/tests/unit/test_egress_policy.py)
