@@ -1,0 +1,64 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-17
+---
+
+# 文字生成可复用音色：GPT-Live prompt-to-voice 全量开放
+
+核查时间：2026-10-17T00:04:04.444739Z（UTC；北京时间加8小时）
+
+## 核心问题
+
+为语音应用设计合适音色，不必先准备录音素材。
+
+## 输入与训练前提
+
+描述成年音色的文字，包括口音、音高、音色和语速；可选代表性台词。还需 API 项目凭据，以及可用的 GPT-Live 连接。
+
+## 输出
+
+创建阶段输出已保存音色的 ID 和元数据；试听阶段输出采用该音色的会话音频；选定后可在后续会话引用同一 ID。
+
+## 关键机制
+
+此次开放的是“文字描述→保存音色→会话引用”的生命周期。录音创建是另一条路径，仍要求获准客户提交同一声音的同意录音与参考样本，不能因文字方式开放就推断录音克隆也全面开放。
+
+## 逐步流程
+
+1. **1. 明确音色与对话任务**：输入是应用场景，例如博物馆成年向导。先写声音的听感，再单独写回答长度、何时求助后端等会话规则。输出两份配置，便于分别调整听感和行为。此处场景为建议试验。
+
+2. **2. 描述变成保存的声音**：调用 /v1/audio/voices，设置 type=prompt，并提供 name、prompt、model=auto。服务保存新音色，返回 voice ID 和元数据，没有直接返回试听音频。记录 ID，避免下一步误把再次创建当成试听。
+
+3. **3. ID 变成实时会话音频**：启动 GPT-Live，把 ID 配到 session.audio.output.voice.id，并在 instructions 保留音色描述。通过 WebRTC 或 WebSocket 接收音频。试听是实际会话，会产生费用；换声音需新会话。
+
+4. **4. 比较、选择并复用**：建议准备三句固定台词，覆盖问候、数字及外语专名；一次只改一种听感。输出选定 ID、描述及测试记录。此试验设计不是官方质量保证，也尚未执行。
+
+## 来源事实与效果证据
+
+- **10 月 16 日面向全部 API 客户开放。创建免费，语音生成按正常会话计费。**：官方 API 更新日志明确列出日期、开放范围与计费边界。 [原始证据](https://developers.openai.com/api/docs/changelog)
+
+## 限制与未知
+
+- 文字生成音色仅支持 GPT-Live；不支持 TTS、Realtime 或 Chat Completions。
+- 每组织最多 100 个；创建接口不兼容零数据保留。
+- 不得冒充他人或生成儿童声音，须披露 AI 合成；音色不保证独有。
+- 这里的可用模型配置为 gpt-live-1；GPT-Live-1.1 的应用端滚动推出与 API 可用性不能混为一谈。
+- 官方材料未提供本功能的独立质量、延迟或成本对比基准；本文没有试听结果。
+
+## 工程建议（未经本次复现）
+
+- 前置连接：浏览器需 HTTPS 或 localhost、麦克风及音频播放；可信服务端持有项目 API key，不能把长期密钥写进前端。
+- 会话确认启动后再测试，完成后关闭并收集用量。GPT-Live 按秒计费，后端模型和工具另计，创建免费不等于整条试验免费。
+- 建议给每次测试保存音色 ID、原始描述、语言、台词与评分；限制尝试数量。将音色选择和应用行为分别回归，避免以为声音温和就代表任务判断可靠。
+
+## 阅读范围
+
+已读官方更新日志 10 月 16 日条目，以及 Custom voices 中 Create a voice from a description 至 Refine and reuse 的完整正文与示例；未调用 API、未试听。 另读 Getting started with GPT-Live 主体全文，及录音创建资格与双录音要求；未通读录音接口全部参考。
+
+## 原始来源
+
+- [OpenAI API 更新日志：2026-10-16](https://developers.openai.com/api/docs/changelog)
+- [Custom voices：文字创建与 GPT-Live 使用](https://developers.openai.com/api/docs/guides/custom-voices)
+- [Getting started with GPT-Live：连接、分工与计费](https://developers.openai.com/api/docs/guides/live)
