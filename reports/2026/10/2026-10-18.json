@@ -1,0 +1,134 @@
+{
+  "date": "2026-10-18",
+  "title": "AI 工程研究日报",
+  "edition_label": "增量核查 / COLMAP 状态更正",
+  "summary": "本轮没有新增完成深入核读、值得独立推荐的技术条目。五个方向的核查范围和原始来源见下方；不重复旧技术凑数。",
+  "notice": "对照2026-10-17期及近期历史。更正：10月16期将 COLMAP #4858 标为 Open；本次官方原页确认已于10月15日合并（e5c4787），不属于今天新发布，也不等于已进入稳定发行版。RAGFlow 1.0.0-rc2仅核对发布说明，未验证源码、复现或效果，保留为关注线索。未修改旧报告。",
+  "verified_at": "2026-10-18T00:00:00.591206Z",
+  "items": [],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "未发现本轮值得新增的已核实重大更新。已打开 OpenAI API changelog、Claude Platform release notes 及两家官方新闻索引，核查最近一日（2026-10-17 UTC，至 23:58）的发布。OpenAI 最新 API 条目仍为 10 月 16 日 prompt-to-voice，Anthropic 最新 API 条目仍为 10 月 15 日；均早于本轮且前期已覆盖。官方新闻索引未提供 10 月 17 日新的前沿用法发布。搜索中出现的 10 月 17 日二次报道不能作为功能首次发布日期。范围限于已打开的官方页面，未声称全网无更新。",
+      "source_date": "截至 2026-10-17 23:58 UTC 核查；OpenAI API 最新条目 2026-10-16；Claude Platform 最新条目 2026-10-15",
+      "sources": [
+        {
+          "title": "OpenAI API Changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "OpenAI News",
+          "url": "https://openai.com/news/"
+        },
+        {
+          "title": "Anthropic Newsroom",
+          "url": "https://www.anthropic.com/news"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "未发现最近一日可新增的重大智能体工作流更新。已打开官方 Claude Code、OpenAI Agents Python 和 Browser Use releases：最新可见分别为 v2.1.302（10 月 16 日 20:53）、v0.24.0（10 月 15 日）和 0.13.13（10 月 15 日 23:50）。Claude Code 包含自动模式模型选择、闲置压缩设置及修复，但发布时间早于本轮窗口；Browser Use 的 OpenAI browser-tool driver 同样早于本轮。未将旧版本改写为今日发布，也未实际安装或调用 API。结论限于这些官方发布页和平台 changelog。",
+      "source_date": "截至 2026-10-17 23:58 UTC 核查；最新相关版本日期 2026-10-16、2026-10-15",
+      "sources": [
+        {
+          "title": "Claude Code releases",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        },
+        {
+          "title": "Browser Use releases",
+          "url": "https://github.com/browser-use/browser-use/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "未发现本轮值得新增的采集工具重大更新。已打开 Crawl4AI、Firecrawl、Playwright 官方 releases，以及 Firecrawl 官方 changelog。Crawl4AI 最新 v0.9.5 为 10 月 14 日且前期已覆盖；Playwright 最新 v1.64.1 为 10 月 14 日修复版；Firecrawl 官方 changelog 最新是 10 月 15 日 Fireround，GitHub 最新版本仍为 v2.11.0（6 月发布）。均无可核实的 10 月 17 日新发布，未用旧功能补位。仅核查公开发布记录，没有实际采集、付费调用、安装或私有数据访问；未覆盖所有采集工具。",
+      "source_date": "截至 2026-10-17 23:58 UTC 核查；Crawl4AI/Playwright 最新 2026-10-14；Firecrawl changelog 最新 2026-10-15",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Firecrawl changelog",
+          "url": "https://www.firecrawl.dev/changelog"
+        },
+        {
+          "title": "Firecrawl releases",
+          "url": "https://github.com/firecrawl/firecrawl/releases"
+        },
+        {
+          "title": "Playwright releases",
+          "url": "https://github.com/microsoft/playwright/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "本轮未确认可列为今日新增的数字人、人脸几何、Gaussian/Mesh方法或正式版本；另作一处历史状态更正。",
+      "scope": "核验 arXiv cs.CV recent/new、Gaussian/avatar/mesh 与 10月17日相关原始来源搜索，以及 COLMAP #4858、#4859 和 COLMAP/OpenMVS 官方发布页。",
+      "limitations": "arXiv recent 最新批次为2026-10-16；这不证明所有其他渠道均无新内容。未对本轮没有实质新增证据的旧论文重读全文，也未运行代码或基准。GitHub搜索列表可能滞后，PR状态以原页为准。",
+      "source_date": "核验时间2026-10-18 07:59 Asia/Shanghai；arXiv最新批次2026-10-16；COLMAP #4858合并2026-10-15；#4859创建2026-10-14且原页仍Open；COLMAP 4.2.1发布2026-09-29；OpenMVS v2.4.0发布2026-01-20、RoMa v2 ONNX预发布2026-09-09。",
+      "notice": "历史状态更正：10月16日曾列为Open的COLMAP #4858，官方PR原页现证实已于10月15日合并至main，merge commit e5c47870a1cbfde36de86ae507a4b6f7d8f786bb；这是本次核验发现的状态更正，并非10月17日新增算法或发布。#4859原页仍为Open。这里只记录当期更正，不改写旧日报。",
+      "read_scope": "阅读官方PR状态、合并事件、修复说明和测试范围，以及官方release日期/版本与arXiv目录日期；未读取合并commit代码（链接抓取失败），因此不制作算法或实现详解卡。",
+      "sources": [
+        {
+          "title": "COLMAP #4858：Honor the declared vertex count when reading ASCII PLY（Merged，2026-10-15）",
+          "url": "https://github.com/colmap/colmap/pull/4858"
+        },
+        {
+          "title": "COLMAP #4859：Keep progressive sampler indices within the active prefix（Open）",
+          "url": "https://github.com/colmap/colmap/pull/4859"
+        },
+        {
+          "title": "COLMAP官方发布页",
+          "url": "https://github.com/colmap/colmap/releases"
+        },
+        {
+          "title": "OpenMVS官方发布页",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        },
+        {
+          "title": "arXiv cs.CV recent",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本轮未确认可列为今日新增的RAG研究方法；保留近期工具版本的日期核验，不将旧版本或抓取日期算作新发布。",
+      "scope": "核验 arXiv cs.IR recent/new 与RAG相关10月17日来源搜索，复核随机投影隐私RAG的版本历史，以及RAGFlow、LightRAG官方发布页。",
+      "limitations": "arXiv cs.IR最新批次为2026-10-16；搜索和所列官方页不是全网穷尽覆盖。没有新候选满足全文方法、实验表格与限制均完成阅读的入选门槛。本轮未验证RAGFlow代码、性能或部署，不声称产品变化带来效果提升。",
+      "source_date": "核验时间2026-10-18 07:59 Asia/Shanghai；arXiv cs.IR最新批次2026-10-16；随机投影RAG v1为2026-10-15 17:45:51 UTC，无后续版本；RAGFlow v1.0.0-rc2为2026-10-16 09:49（官方页显示）；LightRAG v1.5.7为2026-09-02。",
+      "notice": "RAGFlow v1.0.0-rc2已核验为10月16日发布的候选版（ac29b4b），并非10月17日新增：release列出Agentic模式替换四档thinking、12个内置文档解析器与Pipeline统一及arm64镜像等。仅作发布页补充核验，不制作算法卡。随机投影RAG没有核验到相对旧公开稿的实质新差异，继续排除；RCER、SG2RAG及visibility等已覆盖内容不重复充数。",
+      "read_scope": "阅读arXiv目录日期、随机投影RAG摘要页与版本历史、RAGFlow release亮点和部分变更列表、LightRAG release日期与说明；本轮无新论文全文解读。",
+      "sources": [
+        {
+          "title": "arXiv cs.IR recent",
+          "url": "https://arxiv.org/list/cs.IR/recent"
+        },
+        {
+          "title": "Private Retrieval Augmented Generation via Random Projection：版本历史",
+          "url": "https://arxiv.org/abs/2610.22297"
+        },
+        {
+          "title": "RAGFlow v1.0.0-rc2官方发布说明",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/v1.0.0-rc2"
+        },
+        {
+          "title": "LightRAG官方发布页",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    }
+  ]
+}
