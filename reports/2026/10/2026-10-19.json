@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-19",
+  "title": "AI 工程研究日报",
+  "edition_label": "SVG 图示文字入库 / 增量核查",
+  "summary": "本期细读 RAGFlow 新合并的 SVG 文字解析路径：让流程图中的真实文本进入知识库，说明它能读到什么、不能读到什么，以及 nightly 与正式版的区别。未安装或复现实验。",
+  "notice": "对照2026-10-18期及近期历史去重。SVG 改动于10月17日合并、10月18日 nightly 构建可见，本轮首次细读；不是今天发布的新算法或稳定版。大模型前沿用法无可信新机制；Claude Code 2.1.303仅有笼统维护说明。核查范围有限，无新增不等于全网无发布。",
+  "verified_at": "2026-10-19T00:04:31.540931Z",
+  "items": [
+    {
+      "id": "ragflow-svg-text-nightly",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow nightly补齐SVG标签文字摄取",
+      "finding": "10月18日晚nightly包含SVG XML文字提取，可摄取保留文字的Mermaid、draw.io图；改动于17日合并。",
+      "relevance": "工程图或流程图进入知识库时，可避免SVG被位图解码器拒绝。",
+      "action": "有SVG资料的项目可用代表样本做摄取回归；无需为此直接升级生产。",
+      "caveat": "nightly非stable；不识别转曲或位图文字，不恢复连线关系，未测RAG收益。",
+      "recency_label": "10月18日nightly打包；10月17日合并；10月2日PR首次公开",
+      "source_date": "2026-10-18",
+      "sources": [
+        {
+          "title": "RAGFlow nightly发布页",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        },
+        {
+          "title": "SVG文字摄取PR #20523",
+          "url": "https://github.com/infiniflow/ragflow/pull/20523"
+        },
+        {
+          "title": "最终合并commit 543e167",
+          "url": "https://github.com/infiniflow/ragflow/commit/543e167"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-19/ragflow-svg-text-nightly.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "无新增可展开的使用机制。OpenAI API最新仍为10月16日文字音色，Claude Platform最新仍为10月15日；已有报道不重复。官方开发博客未见本轮新技术更新。仅核查所列官方公开页，未调用API。",
+      "source_date": "核查于2026-10-19 08:03 Asia/Shanghai；具体发布日期见说明",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "OpenAI Developer Blog",
+          "url": "https://developers.openai.com/blog"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Claude Code 2.1.303于10月18日22:26 UTC（上海10月19日06:26）发布，说明仅为错误修复与可靠性改善，未披露具体机制，故不编造详解或宣称性能提升。Agents Python仍v0.24.0（10月15日），Browser Use仍0.13.13（10月15日）。未安装或运行。",
+      "source_date": "核查于2026-10-19 08:03 Asia/Shanghai；具体发布日期见说明",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.303",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.303"
+        },
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        },
+        {
+          "title": "Browser Use releases",
+          "url": "https://github.com/browser-use/browser-use/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "本轮未确认新增可推荐能力；Crawl4AI仍0.9.5、Playwright仍1.64.1，均为10月14日版本。SVG摄取变化单列知识库条目。未实际采集或测试。",
+      "source_date": "核查于2026-10-19 08:03 Asia/Shanghai；具体发布日期见说明",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Playwright releases",
+          "url": "https://github.com/microsoft/playwright/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "无新增完成正文研读的数字人、人脸或Gaussian-to-Mesh方法。arXiv cs.CV与cs.IR目录仍显示10月16日批次；COLMAP正式版4.2.1（9月29日）、OpenMVS正式版2.4.0（1月20日）未变。OpenMVS另有9月9日RoMa v2模型预发布，不能理解为仓库完全没有后续发布。COLMAP #4858历史状态更正已见昨日；#4859抓取有缓存，本期不宣称实时状态。未运行代码或做精度比较，范围不等于全网穷尽。",
+      "source_date": "2026-10-19 08:02 Asia/Shanghai核查；目录最新2026-10-16",
+      "sources": [
+        {
+          "title": "arXiv cs.CV new",
+          "url": "https://arxiv.org/list/cs.CV/new"
+        },
+        {
+          "title": "COLMAP releases",
+          "url": "https://github.com/colmap/colmap/releases"
+        },
+        {
+          "title": "OpenMVS releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        }
+      ]
+    }
+  ]
+}
