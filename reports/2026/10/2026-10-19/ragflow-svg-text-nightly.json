@@ -1,0 +1,59 @@
+{
+  "id": "ragflow-svg-text-nightly",
+  "title": "RAGFlow nightly：直接提取SVG图中文字",
+  "problem": "Go图片摄取原先把SVG交给位图解码器，导致格式错误，图中的现成文字进不了知识库。",
+  "inputs": "保留text或foreignObject文字的SVG，例如Mermaid、draw.io导出图；使用有效图片解析配置。",
+  "outputs": "附带提取文字的图片文档项、原SVG附件，以及空文字或跳过视觉增强等警告。",
+  "pipeline": [
+    {
+      "title": "检查与分流",
+      "explanation": "沿用图片并发准入和载荷上限，按.svg后缀进入XML路径；其他图片仍走原解码流程。"
+    },
+    {
+      "title": "读取文字",
+      "explanation": "遍历text及foreignObject内文字，处理换行、空白和隐藏子树，保留文字顺序，不把SVG栅格化。"
+    },
+    {
+      "title": "写入文档项",
+      "explanation": "把文字写回解析结果，保留图像附件；SVG跳过OCR调用和视觉模型增强，输出相应警告。"
+    }
+  ],
+  "mechanism": "这是结构化文字抽取，不是图像识别。直接利用SVG已有字符，避免先渲染再OCR；从代码推断，它不恢复流程图连线或空间关系。",
+  "results": [
+    {
+      "claim": "进入最新nightly，尚非stable能力发布。",
+      "evidence": "发布正文记录2026-10-18 21:14:22+08:00构建，指向543e167；PR于10月17日合并，最初公开于10月2日。",
+      "source": "https://github.com/infiniflow/ragflow/releases"
+    },
+    {
+      "claim": "修复SVG摄取路径，有局部测试证据。",
+      "evidence": "PR报告解析与race测试通过，合并页显示6项检查通过；本次未复跑，无检索质量或延迟基准。",
+      "source": "https://github.com/infiniflow/ragflow/pull/20523"
+    }
+  ],
+  "limitations": [
+    "转曲文字和内嵌位图中的文字无法提取；不等于理解图表。",
+    "底层不调用OCR/VLM，但组件仍拒绝二者同时关闭的图片配置。",
+    "nightly不是稳定版；编号发布仍为10月16日1.0.0-rc2（候选版）。"
+  ],
+  "engineering_notes": [
+    "最小试用：在隔离环境固定到包含543e167的版本或对应nightly，启用有效图片解析配置，导入含可选中文字的SVG，检查解析文档项的text字段与附件；再以相同图的转曲版、内嵌位图版作负例。对照旧版本是否报格式错误，记录文字完整性和警告；这是建议实验，本次未执行。",
+    "最终代码已有1024层嵌套上限、64项实体声明上限及实体展开预算；旧审查意见不能直接作为现存漏洞结论。",
+    "不要将模型调用减少推导为已验证的性能或准确率提升。"
+  ],
+  "sources": [
+    {
+      "title": "RAGFlow nightly发布页",
+      "url": "https://github.com/infiniflow/ragflow/releases"
+    },
+    {
+      "title": "SVG文字摄取PR #20523",
+      "url": "https://github.com/infiniflow/ragflow/pull/20523"
+    },
+    {
+      "title": "最终合并commit 543e167",
+      "url": "https://github.com/infiniflow/ragflow/commit/543e167"
+    }
+  ],
+  "read_scope": "已读PR正文、最终配置限制说明及543e167合并diff中的分流、XML与安全预算逻辑；未运行代码，未完整审计安全性。"
+}
