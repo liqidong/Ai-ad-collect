@@ -1,0 +1,167 @@
+{
+  "date": "2026-10-20",
+  "title": "AI 工程研究日报",
+  "edition_label": "视频数字人 / 工具执行的人审边界",
+  "summary": "本期关注视频数字人的控制方式，以及 Claude Code 新增工具审核能力。分别说明输出形态、可用前提与证据限制；本轮未运行作者模型、未安装新版本或测量实际效果。",
+  "notice": "对照2026-10-19及近期历史去重。论文提交日期、公告日期和软件发布日期分别标注；视频生成结果不等于可自由交互的三维高斯资产。其余方向仅记录核验范围，不用旧闻凑数。",
+  "verified_at": "2026-10-20T00:04:17.027036Z",
+  "items": [
+    {
+      "id": "claude-code-21304-person-approval",
+      "category": "大模型前沿用法",
+      "title": "Claude Code 2.1.304：把必须确认的工具调用交给人审入口",
+      "finding": "10月19日发布的2.1.304允许mod为tool.check指定decider:\"person\"，无审批入口时拒绝。",
+      "relevance": "适合为无人值守代码／采集agent保留关键操作审核边界。",
+      "action": "在隔离样例验证交互批准、拒绝和无回调headless三条路径，并加入hook异常测试。",
+      "caveat": "宿主回调不自动等于真人；在线reference有版本滞后，须核对安装版类型。仅文档核查，未实测。",
+      "recency_label": "新增发布",
+      "source_date": "2026-10-19",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.304 发布说明（2026-10-19）",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.304"
+        },
+        {
+          "title": "Mods：事件处理与失败语义",
+          "url": "https://code.claude.com/docs/en/plugins/mods/events"
+        },
+        {
+          "title": "Mods reference：接口与版本边界",
+          "url": "https://code.claude.com/docs/en/plugins/mods/reference"
+        },
+        {
+          "title": "Mods 开放范围",
+          "url": "https://code.claude.com/docs/en/plugins/mods/overview"
+        },
+        {
+          "title": "Mods 本地测试",
+          "url": "https://code.claude.com/docs/en/plugins/mods/test"
+        },
+        {
+          "title": "Claude Code 安装、账户与升级",
+          "url": "https://code.claude.com/docs/en/setup"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-20/claude-code-21304-person-approval.md"
+    },
+    {
+      "id": "video-diffusion-avatars-2610-23772",
+      "category": "数字人 / 几何",
+      "title": "Video Diffusion Avatars：把视角与表情控制拆开",
+      "finding": "新公告论文以相机三元组监督和代理网格条件，让视频模型支持独立表情、上身与相机控制。",
+      "relevance": "对人脸驱动的视角泄漏测试、网格条件设计有直接参考价值。",
+      "action": "优先阅读方法与消融；先做离线控制实验，不直接替换实时资产渲染。",
+      "caveat": "作者结果未复现；输出视频而非3D资产。代码已公开且有非商业许可限制，正式模型约12分钟生成77帧，另计加载解码。",
+      "recency_label": "10月19日新公告；10月16日提交",
+      "source_date": "2026-10-16",
+      "sources": [
+        {
+          "title": "论文全文：方法、实验与附录",
+          "url": "https://arxiv.org/html/2610.23772"
+        },
+        {
+          "title": "arXiv 版本与提交时间",
+          "url": "https://arxiv.org/abs/2610.23772"
+        },
+        {
+          "title": "cs.CV 10月19日公告批次",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        },
+        {
+          "title": "官方代码与运行/许可说明",
+          "url": "https://github.com/SimonGiebenhain/video-diffusion-avatars"
+        },
+        {
+          "title": "官方模型主页（未下载验证）",
+          "url": "https://huggingface.co/SimonGiebenhain/video-diffusion-avatars"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-20/video-diffusion-avatars-2610-23772.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "OpenAI API：官方changelog顶部仍为prompt-to-voice；10月15日Decisions已报道，不重复入选。；Claude Platform：官方英文release notes顶部仍为Opus5.5 fast mode与Compliance更新；未证实聚合页出现的10月19日条目，排除该线索。 以上为本轮打开的官方发布页可见状态；不声称穷尽所有仓库提交或未发布功能。",
+      "source_date": "OpenAI API 2026-10-16；Claude Platform 2026-10-15",
+      "sources": [
+        {
+          "title": "OpenAI API官方更新",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform官方更新",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "OpenAI Agents Python：打开官方releases，最新仍为0.24.0。；Browser Use：打开官方releases，最新仍为0.13.13；未重复驱动集成旧闻。 以上为本轮打开的官方发布页可见状态；不声称穷尽所有仓库提交或未发布功能。",
+      "source_date": "OpenAI Agents Python 2026-10-15；Browser Use 2026-10-15",
+      "sources": [
+        {
+          "title": "OpenAI Agents Python官方更新",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        },
+        {
+          "title": "Browser Use官方更新",
+          "url": "https://github.com/browser-use/browser-use/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Crawl4AI：打开官方releases，最新仍为0.9.5。；Playwright：打开官方releases，最新仍为1.64.1。 以上为本轮打开的官方发布页可见状态；不声称穷尽所有仓库提交或未发布功能。",
+      "source_date": "Crawl4AI 2026-10-14；Playwright 2026-10-14",
+      "sources": [
+        {
+          "title": "Crawl4AI官方更新",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Playwright官方更新",
+          "url": "https://github.com/microsoft/playwright/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "最新命名发行仍为10月16日v1.0.0-rc2，不重复报道。nightly正文已推进到2026-10-19 13:21:12 UTC、7eb673b。；确认标题Fix claim/evidence usage in agentic RAG (#21170)，页面显示12文件、+1901/-333。本轮未深读diff、不判断修复机制，不作为精选。故不能笼统写RAG无更新。；页面最新为v1.5.7，9月2日；没有在此发行页确认10月19日新版本。 未运行或做性能基准，未声称穷尽全网。",
+      "source_date": "核查2026-10-20 08:03 Asia/Shanghai；具体发布日期见正文",
+      "sources": [
+        {
+          "title": "RAGFlow releases",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        },
+        {
+          "title": "RAGFlow nightly commit",
+          "url": "https://github.com/infiniflow/ragflow/commit/7eb673bfc3ab1cc22532fe23a1e9bb85c34e48bd"
+        },
+        {
+          "title": "LightRAG releases",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "当前首批为10月19日126篇；检查首50条并选中第6条VDA深入读。未声称全批穷尽筛选。；仍为4.2.1，9月29日，不复述为新版本。；稳定版本仍v2.4.0，1月20日；另有9月9日RoMa v2 ONNX模型预发布，非今日新软件版本。 未运行或做性能基准，未声称穷尽全网。",
+      "source_date": "核查2026-10-20 08:03 Asia/Shanghai；具体发布日期见正文",
+      "sources": [
+        {
+          "title": "arXiv cs.CV recent",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        },
+        {
+          "title": "COLMAP releases",
+          "url": "https://github.com/colmap/colmap/releases"
+        },
+        {
+          "title": "OpenMVS releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        }
+      ]
+    }
+  ]
+}
