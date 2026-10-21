@@ -1,0 +1,56 @@
+{
+  "id": "claude-code-21305-workflow-resume-20261020",
+  "title": "Claude Code v2.1.305：修复工作流恢复时重复执行已完成子代理",
+  "problem": "2026-10-20 的 v2.1.305 修复一种恢复错误：未改动的 pipeline()/parallel() 工作流，每个条目中运行多个 agent 时，恢复仍可能重跑已经完成的 agent。对长审计、批量迁移而言，这可能浪费 token，也可能重复写文件。",
+  "inputs": "同一 Claude Code 会话中的工作流脚本、先前运行的 journal/已保存结果，以及尚未完成的 agent。建议更新至 v2.1.305 后建立新运行以获得修复行为。",
+  "outputs": "恢复的最终工作流结果；匹配的已完成 agent 直接返回旧结果，确需重跑的部分产生新结果。不是所有中断都能无损续跑，也不是跨新会话的全局缓存。",
+  "pipeline": [
+    {
+      "title": "把编排保存在脚本中",
+      "explanation": "工作流的循环和分支由脚本执行；子代理产生结果后由运行时记录。恢复依据不是让主模型凭记忆判断做没做过。"
+    },
+    {
+      "title": "同会话恢复并按顺序重放",
+      "explanation": "恢复时按 agent 启动顺序匹配已有记录；已完成且仍匹配的返回保存结果。此次修复的是多 agent 的 pipeline/parallel 恢复路径。"
+    },
+    {
+      "title": "从失配或失败位置继续",
+      "explanation": "若提示不同、agent 失败或执行顺序变化，则该位置与后续 agent 重跑；停止时仍运行的 agent 也重启。它不等于逐节点任意顺序的 exactly-once 引擎。"
+    }
+  ],
+  "mechanism": "这是运行时恢复语义修复，不是新推理算法。把可复用结果从 journal 取回，减少本应可避免的重复执行；一旦重放与原运行不一致，则保守地重新计算后续依赖。",
+  "results": [
+    {
+      "claim": "v2.1.305 已发布，官方 release 展示 20 Oct 20:46。",
+      "evidence": "直接打开 tag 页面，列出 Workflow resume 修复；搜索索引一度仍显示 v2.1.304，因此以官方实际页面为准。页面显示时间未在本文额外推断时区。",
+      "source": "https://github.com/anthropics/claude-code/releases/tag/v2.1.305"
+    },
+    {
+      "claim": "修复范围有明确版本边界，而非泛泛性能宣称。",
+      "evidence": "Workflows 文档的 Which agents run again 明确注明 v2.1.305 前，多 agent 的 pipeline/parallel 即使脚本未变也可能重跑；更新用于避免新运行遇到此问题。",
+      "source": "https://code.claude.com/docs/en/workflows"
+    }
+  ],
+  "limitations": [
+    "官方未给节省比例、受影响运行比例或基准；没有实测该版本。",
+    "编辑脚本、失败、启动顺序改变仍会导致后续工作重跑；新开会话启动的是新运行。",
+    "副作用不会因重放自动撤销。结果复用不能替代写入、通知或外部动作的幂等性。"
+  ],
+  "engineering_notes": [
+    "最小验证建议：创建只读合成工作流，每个 parallel 条目内安排两个 agent；在部分条目完成后暂停，原样恢复，核对完成条目的调用次数和结果。另加修改提示的负例验证合法重跑。未执行此试验。",
+    "将结果文件或外部动作按任务 ID 做幂等检查；测试时只读，不用真实发信或付费动作当计数器。",
+    "同版还有 ToolSearch 被网关拒绝后降级重试的修复，适用于 v2.1.304 回归；这与工作流恢复是独立变化。",
+    "安全注意：新 sandbox.allowNestedUserNamespaces 可帮助 Linux Chromium/rootless podman，但官方明确指出会绕过沙箱文件保护。不要为修复恢复问题顺手开启该开关。"
+  ],
+  "sources": [
+    {
+      "title": "Claude Code v2.1.305 release",
+      "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.305"
+    },
+    {
+      "title": "Dynamic workflows：恢复与结果重放",
+      "url": "https://code.claude.com/docs/en/workflows"
+    }
+  ],
+  "read_scope": "已阅读 v2.1.305 官方完整发布条目，以及 Workflows 的运行机制、约束、缓存和 Manage runs/恢复章节；未审阅实现源码、未安装或运行版本。"
+}
