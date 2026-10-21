@@ -1,0 +1,278 @@
+{
+  "date": "2026-10-21",
+  "title": "AI 工程研究日报",
+  "edition_label": "长时缓存 / 推理前策略 / 工作流恢复 / 检索证据边界",
+  "summary": "本期收录四项10月20日可核验增量，附完整技术解读：OpenAI 12小时缓存、Claude Enterprise推理钩子GA、Claude Code工作流恢复修复，以及RAGFlow删除无分数检索回退。以接口契约与工程边界为主，没有把文档、CI或自算费用当成复现实验。",
+  "notice": "逐期对照2026-10-09至2026-10-20归档去重。全部为公开资料草稿；事实、维护者实验、自算示例与工程建议分开。数字人/几何本轮未新增达全文深读门槛的条目，候选仅筛查元数据，不表示全领域无新论文。未调用付费模型、安装或运行候选版本。",
+  "verified_at": "2026-10-21T00:01:59Z",
+  "items": [
+    {
+      "id": "openai-prompt-cache-12h-20261020",
+      "category": "大模型前沿用法",
+      "title": "OpenAI 12 小时提示缓存：用更贵的首写，换取跨小时复用",
+      "finding": "10月20日新增12小时缓存档位，长写入按普通输入2.5倍计费；不是缓存首次开放。",
+      "relevance": "跨小时重复处理相同长资料时，可按复用间隔选择期限，而非盲目拉长所有请求缓存。",
+      "action": "用固定非敏感长前缀对比30m与12h，记录写/读token与总成本；先做成本回放。",
+      "caveat": "只在支持模型/接口上适用；不保证物理命中或延迟改善。费用示例是自算非实测。",
+      "recency_label": "已开放的新期限",
+      "source_date": "2026-10-20",
+      "sources": [
+        {
+          "title": "OpenAI API changelog，2026-10-20",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Prompt caching：期限、断点与计费机制",
+          "url": "https://developers.openai.com/api/docs/guides/prompt-caching"
+        },
+        {
+          "title": "Prompt cache diagnostics",
+          "url": "https://developers.openai.com/api/docs/guides/prompt-caching/diagnostics"
+        },
+        {
+          "title": "OpenAI API pricing",
+          "url": "https://developers.openai.com/api/docs/pricing"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-21/openai-prompt-cache-12h-20261020.md"
+    },
+    {
+      "id": "claude-inference-hooks-ga-20261020",
+      "category": "大模型前沿用法",
+      "title": "Claude Enterprise 推理钩子 GA：在模型与工具执行前插入企业策略判定",
+      "finding": "10月20日官方宣布Inference hooks对Claude Enterprise退出beta，可在受治理请求推理及工具执行边界接企业策略判定。",
+      "relevance": "把企业DLP由事后审计前移，但必须理解故障放行、采样与覆盖盲区。",
+      "action": "在测试组织用合成标记验证允许、拒绝、超时和错误状态；先Shadow观察，再小比例强制。",
+      "caveat": "不是所有API客户可用；默认fail-open，缺少原始文件字节及部分工具覆盖。未部署实测。",
+      "recency_label": "Enterprise正式可用",
+      "source_date": "2026-10-20",
+      "sources": [
+        {
+          "title": "Claude Platform release notes，2026-10-20",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Inference hooks overview",
+          "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks"
+        },
+        {
+          "title": "Configure Inference hooks",
+          "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration"
+        },
+        {
+          "title": "Develop an Inference hooks integration",
+          "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks-endpoint"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-21/claude-inference-hooks-ga-20261020.md"
+    },
+    {
+      "id": "claude-code-21305-workflow-resume-20261020",
+      "category": "智能体 / 应用",
+      "title": "Claude Code v2.1.305：修复工作流恢复时重复执行已完成子代理",
+      "finding": "10月20日v2.1.305修复多agent的pipeline/parallel工作流恢复时重复执行已完成agent的问题。",
+      "relevance": "长任务恢复可减少不必要重跑，但不能当作外部动作exactly-once保证。",
+      "action": "升级验证环境后构造只读工作流，暂停恢复核对调用次数，并加入改提示的负例。",
+      "caveat": "脚本或顺序变更、失败仍可重跑；未实测。不要为此顺手开启绕过沙箱文件保护的嵌套命名空间。",
+      "recency_label": "已发布修复",
+      "source_date": "2026-10-20",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.305 release",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.305"
+        },
+        {
+          "title": "Dynamic workflows：恢复与结果重放",
+          "url": "https://code.claude.com/docs/en/workflows"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-21/claude-code-21305-workflow-resume-20261020.md"
+    },
+    {
+      "id": "ragflow-scored-retrieval-fallback-20261020",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow 删除无相关性分数的检索回退：宁可零召回，也不把文档扫描伪装成证据",
+      "finding": "10月20日合并#21240并回移#21242，删除文档范围零召回后的无MATCH扫描回退，保留带分数的检索分支。",
+      "relevance": "避免把范围过滤产生的无关文档块当成问题证据；定位全零分数时先查调用路径而不是换embedding。",
+      "action": "固定修复SHA，在预发布环境回放指定文档无关、宽松重试、普通dense救援与Agentic关闭救援样例。",
+      "caveat": "main/nightly与0.27.x分支已合入，不等于新稳定版本；CI成功不是业务质量提升，无本地复现。",
+      "recency_label": "已合并；nightly包含",
+      "source_date": "2026-10-20",
+      "sources": [
+        {
+          "title": "Go 修复 PR #21240",
+          "url": "https://github.com/infiniflow/ragflow/pull/21240"
+        },
+        {
+          "title": "Go 完整差异",
+          "url": "https://github.com/infiniflow/ragflow/pull/21240/files"
+        },
+        {
+          "title": "固定 SHA 的检索实现",
+          "url": "https://github.com/infiniflow/ragflow/blob/b99300a41d5e0b4302b960521d7e774f28ab5f83/internal/service/nlp/retrieval.go"
+        },
+        {
+          "title": "固定 SHA 的检索回归测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/b99300a41d5e0b4302b960521d7e774f28ab5f83/internal/service/nlp/retrieval_test.go"
+        },
+        {
+          "title": "Python 0.27.x 回移 PR #21242",
+          "url": "https://github.com/infiniflow/ragflow/pull/21242"
+        },
+        {
+          "title": "Infinity #3523 根因分析与复现",
+          "url": "https://github.com/infiniflow/infinity/issues/3523#issuecomment-6219266946"
+        },
+        {
+          "title": "报告者纠正初始归因",
+          "url": "https://github.com/infiniflow/infinity/issues/3523#issuecomment-6219932635"
+        },
+        {
+          "title": "维护者确认两条版本线修复",
+          "url": "https://github.com/infiniflow/infinity/issues/3523#issuecomment-6288431838"
+        },
+        {
+          "title": "提交集成测试工作流",
+          "url": "https://github.com/infiniflow/ragflow/actions/runs/39415569105"
+        },
+        {
+          "title": "nightly 构建来源",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/nightly"
+        },
+        {
+          "title": "前后 nightly 比较",
+          "url": "https://github.com/infiniflow/ragflow/compare/7eb673b...30a6808"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-21/ragflow-scored-retrieval-fallback-20261020.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "智能体 / 应用",
+      "status": "OpenAI Agents Python releases：v0.24.0，2026-10-15。直接打开 releases，最新版本未超过基线。本轮无新增入选，不声称仓库无新提交。",
+      "source_date": "2026-10-15；核查2026-10-21",
+      "sources": [
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Browser Use releases：0.13.13，2026-10-15。直接打开 releases，最新版本未超过基线。本轮无新增入选，不声称仓库无新提交。",
+      "source_date": "2026-10-15；核查2026-10-21",
+      "sources": [
+        {
+          "title": "Browser Use releases",
+          "url": "https://github.com/browser-use/browser-use/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "RAGFlow：已入选一个深读增量。nightly 7eb673b→30a6808，共31 commits；正文构建时间 2026-10-20 13:18:51 UTC。稳定/RC 标签无新，仍为 v1.0.0-rc2。其余提交不堆成日报条目。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "RAGFlow 原始来源1",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "LightRAG：发布基线未变化。官方 release 仍为 v1.5.7，2026-09-02。仅作发布页核验，不推断仓库完全无新提交。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "LightRAG 原始来源1",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Crawl4AI：发布基线未变化。官方 release 仍为 v0.9.5，2026-10-14。无新深读采集工具条目。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "Crawl4AI 原始来源1",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Playwright：发布基线未变化。官方 release 仍为 v1.64.1，2026-10-14。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "Playwright 原始来源1",
+          "url": "https://github.com/microsoft/playwright/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "COLMAP：发布基线未变化。官方 latest 仍为 4.2.1，2026-09-29。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "COLMAP 原始来源1",
+          "url": "https://github.com/colmap/colmap/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "OpenMVS：发布基线未变化。官方 latest 软件版仍为 v2.4.0，2026-01-20；页面另有 09-09 RoMa v2 ONNX 模型 prerelease，不是本日增量。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "OpenMVS 原始来源1",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "数字人/几何/Gaussian-to-Mesh 论文：未新增达深读门槛的条目。已打开 arXiv cs.CV recent 全量1259条索引与 cs.GR recent 55条索引，最新列表日为2026-10-20。按 Gaussian、Avatar、Mesh 检索并查看候选元数据。HumanSkill-4D 2610.24452 v1为10-17、PCHMR 2610.24841 v1为10-17，仅完成摘要/元数据筛查，不能发布细节或认定其效果；前者是可动画 Gaussian 的语言指代分割，后者是隐私约束HMR，不是直接 Gaussian-to-Mesh 新算法。本轮优先投入已确认的 RAG 工程增量。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "数字人/几何/Gaussian-to-Mesh 论文 原始来源1",
+          "url": "https://arxiv.org/list/cs.CV/recent?show=2000&skip=0"
+        },
+        {
+          "title": "数字人/几何/Gaussian-to-Mesh 论文 原始来源2",
+          "url": "https://arxiv.org/list/cs.GR/recent?show=2000&skip=0"
+        },
+        {
+          "title": "数字人/几何/Gaussian-to-Mesh 论文 原始来源3",
+          "url": "https://arxiv.org/abs/2610.24452"
+        },
+        {
+          "title": "数字人/几何/Gaussian-to-Mesh 论文 原始来源4",
+          "url": "https://arxiv.org/abs/2610.24841"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "几何相邻候选排除：不作为本日算法卡片。GeoForward 2610.23895 页面 submission history 标为2026-09-28，且方法面向驾驶场景跨视图融合；2D Gaussian Initialization 2610.25809 v1为10-19，但任务为2D图像表示初始化，不是3D Gaussian-to-Mesh。均只读摘要/元数据，不外推实验结论。",
+      "source_date": "具体发布日期见正文；核查2026-10-21",
+      "sources": [
+        {
+          "title": "几何相邻候选排除 原始来源1",
+          "url": "https://arxiv.org/abs/2610.23895"
+        },
+        {
+          "title": "几何相邻候选排除 原始来源2",
+          "url": "https://arxiv.org/abs/2610.25809"
+        }
+      ]
+    }
+  ]
+}
