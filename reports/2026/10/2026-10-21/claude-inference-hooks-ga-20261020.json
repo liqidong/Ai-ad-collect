@@ -1,0 +1,75 @@
+{
+  "id": "claude-inference-hooks-ga-20261020",
+  "title": "Claude Enterprise 推理钩子 GA：在模型与工具执行前插入企业策略判定",
+  "problem": "本次新事实是 2026-10-20 退出 beta。机制解决事后审计太晚的问题：敏感内容已经进入推理或工具动作已执行后，再查日志无法撤回。钩子把组织自己的策略服务放到受治理请求的执行前；不是新的模型能力，也不是通用 Claude API 网关。",
+  "inputs": "Claude Enterprise 的受治理请求。prompt 事件携带用户可见会话、工具结果和附件提取文本；tool_call 事件在启用 Validate tool calls 后提供待执行工具调用。安全服务自行加载企业策略。",
+  "outputs": "服务通过 HTTP 200 返回 action=allow 或 deny，可给用户 deny_reason；放行才继续相应操作，拒绝会进入活动记录。工具调用帧按整批判定，不能只放行其中一部分。",
+  "pipeline": [
+    {
+      "title": "建立可验证的策略端点",
+      "explanation": "组织 Owner/Primary owner 配置公网 HTTPS:443 服务；先用测试请求走通，安全服务验证签名。不是在员工设备逐个安装插件。"
+    },
+    {
+      "title": "在执行边界接收事件",
+      "explanation": "推理前先审 prompt；生成工具调用后还可审 tool_call。后者不是整个历史，策略若依赖上下文需自行关联会话。"
+    },
+    {
+      "title": "作策略决定并返回明确 verdict",
+      "explanation": "业务拒绝必须是 200 加 deny，不能以 403/500 表达。错误状态被当成 webhook 故障，走组织的 fail-open/fail-closed 策略，语义完全不同。"
+    },
+    {
+      "title": "先观察，再逐步强制",
+      "explanation": "Shadow mode 不拦截，随后提高检查比例并启用真实拒绝。默认故障处理是放行，默认时限 5 秒；需要明确选择是否故障时阻断。"
+    }
+  ],
+  "mechanism": "关键不在于再加一个提示词，而是服务器侧的同步判定点。企业可以把确定性 DLP 或自有扫描器接入，返回二值决策。它与 Compliance API 的区别是执行前阻断而非执行后拉取审计记录；不提供提示改写或脱敏替换。GA 改变上线成熟度，不能据此宣称所有既有事件类型也都在当天首次发布。",
+  "results": [
+    {
+      "claim": "Enterprise 可用性从 beta 变为正式。",
+      "evidence": "2026-10-20 官方 release notes 直接列出；文档限定 Enterprise，配置权限为 organization:manage。",
+      "source": "https://platform.claude.com/docs/en/release-notes/overview"
+    },
+    {
+      "claim": "控制点覆盖请求到推理、响应到工具执行的边界。",
+      "evidence": "官方 Overview 和集成协议给出 prompt/tool_call 事件与 allow/deny 处理；属于接口契约，没有披露误报率或漏报率。",
+      "source": "https://platform.claude.com/docs/en/manage-claude/inference-hooks"
+    },
+    {
+      "claim": "异常处理必须作为上线设计的一部分。",
+      "evidence": "配置说明区分 shadow、fail-open、fail-closed；只有连接失败会在同一预算内重试一次。持续错误可触发熔断。",
+      "source": "https://platform.claude.com/docs/en/manage-claude/inference-hooks-endpoint"
+    }
+  ],
+  "limitations": [
+    "Claude Platform API 组织不在范围内，也不是 Amazon Bedrock/Google Cloud 的通用钩子；不能把 Enterprise GA 写成所有 API 用户可用。",
+    "只得到文本与提取内容，不检查原始图片/文件字节；部分内置工具、语音工具调用与托管后台功能不完全覆盖。",
+    "每次判定增加往返等待；Shadow 也有等待成本。采样之外的请求不会被检查，不能把部分流量试点当成全量安全保证。",
+    "旧拒绝内容仍可能留在会话，后续完整历史再次触发拒绝；修正应移除原内容，而不只是追加一条说明。",
+    "未部署策略服务，未做安全效果或延迟实测。"
+  ],
+  "engineering_notes": [
+    "最小试用建议：使用测试 Enterprise 环境和合成内容，先跑允许一切的已验签端点，再加入一个无害标记的拒绝规则；验证普通 prompt、工具调用、超时和错误状态四条路径。先 Shadow 观察误报，再小比例 enforcement。",
+    "生产签名需基于原始请求字节验证；用 webhook-id 去重，不要把 source.application 或工具名称单独当信任边界。",
+    "需要测试大请求体与依赖服务故障。反向代理默认 body 限制可能让扫描失败；若 fail-open，失败不是保护成功。",
+    "日志只保留排错必需数据，避免为做 DLP 又复制一份敏感全文到宽权限日志。先约定故障处置与人工例外流程，再推广。"
+  ],
+  "sources": [
+    {
+      "title": "Claude Platform release notes，2026-10-20",
+      "url": "https://platform.claude.com/docs/en/release-notes/overview"
+    },
+    {
+      "title": "Inference hooks overview",
+      "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks"
+    },
+    {
+      "title": "Configure Inference hooks",
+      "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration"
+    },
+    {
+      "title": "Develop an Inference hooks integration",
+      "url": "https://platform.claude.com/docs/en/manage-claude/inference-hooks-endpoint"
+    }
+  ],
+  "read_scope": "已阅读官方发布说明及 Overview 正文；分段阅读配置中的启用、端点、失败策略、采样、Shadow、熔断，集成协议中的请求/工具帧、verdict、验签、重试、延迟与前向兼容。不是只读摘要；未部署或实测。"
+}
