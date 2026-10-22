@@ -1,0 +1,206 @@
+{
+  "date": "2026-10-22",
+  "title": "AI 工程研究日报",
+  "edition_label": "API迁移 / 推理治理 / 取消安全 / 单图头部",
+  "summary": "本期逐项研读官方API与工具更新，并对数字人相关论文做首次全文补收。重点是接口迁移和运行边界，不把文档宣布或作者实验当作本地复现结果。",
+  "notice": "对照2026-10-21并回看10月9日至21日全部13期去重。各条标明真实来源日期，旧稿首次研读不包装成今日新发布；所有最小试用步骤均为建议，本次没有运行模型或修改账户设置。",
+  "verified_at": "2026-10-22T00:08:30Z",
+  "items": [
+    {
+      "id": "claude-api-20261021-migration",
+      "category": "大模型前沿用法",
+      "title": "Claude API 2026-10-21：升级 SDK 之前先迁移请求契约和网关鉴权",
+      "finding": "10月21日发布新 API 版本与 SDK 主版本；采样参数被移除，新客户端默认鉴权头及消息类型也变化。这是兼容性迁移，不是模型能力升级。",
+      "relevance": "RAG 与多模型统一封装经常自动附加 temperature 或重写鉴权头，升级可能让原本可用的链路直接失败。",
+      "action": "先固定旧依赖；在隔离分支用合成请求核对参数、消息角色、网关头和类型，再小流量迁移。",
+      "caveat": "已发布但未在本轮安装或调用；API 版本兼容与 SDK 本地破坏性变更是两个维度。Bedrock 旧模型另有限制。",
+      "recency_label": "已发布的破坏性接口升级",
+      "source_date": "2026-10-21；Python v2.0.0 发布页显示15:51 UTC",
+      "sources": [
+        {
+          "title": "Claude API 2026-10-21 官方迁移指南",
+          "url": "https://platform.claude.com/docs/en/api/migration-2026-10-21"
+        },
+        {
+          "title": "Python SDK v2.0.0 发布",
+          "url": "https://github.com/anthropics/anthropic-sdk-python/releases/tag/v2.0.0"
+        },
+        {
+          "title": "v2.0.0 固定标签客户端源码",
+          "url": "https://github.com/anthropics/anthropic-sdk-python/blob/v2.0.0/src/anthropic/_client.py"
+        },
+        {
+          "title": "Claude Platform 10月21日发布说明",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-22/claude-api-20261021-migration.md"
+    },
+    {
+      "id": "claude-code-21307-mcp-retry",
+      "category": "智能体 / 应用",
+      "title": "Claude Code v2.1.307：HTTP MCP 断线后不再无差别重试写工具",
+      "finding": "10月21日发布修复，将调用中断后的自动重试限制到只读或幂等工具，并新增安全干预遥测事件。与上期工作流恢复修复不同，这是单次远程工具调用边界。",
+      "relevance": "科研智能体一旦连接任务提交、数据库写入或文件发布，断线后重复执行可能比模型回答错误更昂贵。",
+      "action": "在无外部副作用的测试 MCP 服务模拟“服务端已执行、客户端未收到响应”，检查只读、幂等、非幂等三类工具的调用次数。",
+      "caveat": "仅官方发布行为说明；未安装或注入断线实测。不能把修复解释为所有链路的 exactly-once 保证。",
+      "recency_label": "已发布修复；需故障注入验收",
+      "source_date": "2026-10-21 22:17 UTC，v2.1.307发布页",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.307 官方发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.307"
+        },
+        {
+          "title": "MCP ToolAnnotations 规范（既有基础，不是本日新发布）",
+          "url": "https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations"
+        },
+        {
+          "title": "Claude Code OpenTelemetry 官方配置说明",
+          "url": "https://code.claude.com/docs/en/monitoring-usage"
+        },
+        {
+          "title": "Claude Code MCP 接入与重连说明",
+          "url": "https://code.claude.com/docs/en/mcp"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-22/claude-code-21307-mcp-retry.md"
+    },
+    {
+      "id": "openai-service-tier-policy-20261021",
+      "category": "大模型前沿用法",
+      "title": "OpenAI 项目服务档位策略：把运行档位约束放在调用端之外",
+      "finding": "10月21日官方新增项目允许服务档位设置，组织可统一限制；不是新增推理模型或新加速档位。",
+      "relevance": "多代理与实验脚本共用项目时，可用平台策略约束调用档位，减少仅靠脚本约定的治理盲区。",
+      "action": "在隔离测试项目验证显式档位、auto及省略参数三类请求；对策略400停止盲重试，保留可诊断错误。",
+      "caveat": "属于API平台设置，不代表ChatGPT订阅功能；Scale Tier不在此项目策略内。未修改真实账户或运行请求，无法量化节省。",
+      "recency_label": "官方宣布已可用",
+      "source_date": "2026-10-21",
+      "sources": [
+        {
+          "title": "OpenAI API Changelog 10月21日",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Error codes：service_tier策略边界",
+          "url": "https://developers.openai.com/api/docs/guides/error-codes"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-22/openai-service-tier-policy-20261021.md"
+    },
+    {
+      "id": "ragflow-budget-stop-final-delivery",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow 修复预算停止后答案随机丢失：计算取消不再等于投递取消",
+      "finding": "来源事实：RAGFlow #21301 于2026-10-21合并，修复预算耗尽后已生成答案仍可能随机被丢弃的问题；优先发送结果，阻塞时只听外层请求取消。作者报告空答从预算停止样本4/26变为0/73，未独立复现。",
+      "relevance": "直接关系长链路RAG的成本上限与回答可靠性；与上一期 scored fallback 不同，本次解决结果投递生命周期。",
+      "action": "工程建议：固定 e2401e5 在隔离实例比较预算停止、缓冲满及客户端断线；同时记录服务final_bytes和客户端Final帧，不以生成成功替代交付成功。",
+      "caveat": "main/nightly可用，非稳定版发布承诺；实验配置不完整，0/73不是生产零故障或质量提升结论。",
+      "recency_label": "新增代码修复 · main/nightly · 未复现",
+      "source_date": "2026-10-21T12:20:48Z",
+      "sources": [
+        {
+          "title": "RAGFlow PR #21301：预算停止后的最终答案投递修复",
+          "url": "https://github.com/infiniflow/ragflow/pull/21301"
+        },
+        {
+          "title": "固定提交：agentic_pipeline.go",
+          "url": "https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/service/agentic_pipeline.go"
+        },
+        {
+          "title": "固定提交：token_budget.go",
+          "url": "https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/common/token_budget.go"
+        },
+        {
+          "title": "固定提交：agent.go 终止回退",
+          "url": "https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/agentic_rag/agent.go"
+        },
+        {
+          "title": "RAGFlow nightly",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/nightly"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-22/ragflow-budget-stop-final-delivery.md"
+    },
+    {
+      "id": "egghead-budgeted-gaussian-heads",
+      "category": "数字人 / 几何",
+      "title": "EGGHead：固定高斯预算的单图头部重建，首次细读而非今日发布",
+      "finding": "2026-10-16 提交的近期论文，本次新增细读：以学习到的密度分配有限高斯点，用 Voronoi 几何先验减少直接回归形状的不稳定。输出为高斯头部，不是可交付网格。",
+      "relevance": "为低预算数字人提供可测的采样/几何先验方案；不能当作 Gaussian-to-Mesh 问题已经解决。",
+      "action": "先按详解设计 4k/8k/12k 等预算消融与全流水线计时；官方代码/权重未核实，不给出可直接运行承诺。",
+      "caveat": "作者实验未复现；单卡 A6000 结果不等于 RTX4090 性能。缺少重光照和完整后脑保证，数据商业使用须另核许可。",
+      "recency_label": "近期论文首次细读；非今日新发布",
+      "source_date": "2026-10-16（arXiv v1）",
+      "sources": [
+        {
+          "title": "EGGHead 原始论文 v1（正文及补充材料）",
+          "url": "https://arxiv.org/html/2610.26898v1"
+        },
+        {
+          "title": "EGGHead 原始提交记录：2026-10-16",
+          "url": "https://arxiv.org/abs/2610.26898"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-22/egghead-budgeted-gaussian-heads.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "采集 / 工具",
+      "status": "无已核实新增release：Crawl4AI 0.9.5、Playwright 1.64.1、Browser Use 0.13.13与上期相同；仅核查发布页，不断言main没有任何提交。采集合法性、robots与数据许可仍需逐目标检查，工具更新不赋予访问授权。",
+      "source_date": "截至2026-10-22核查；旧版不作本日发布",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Playwright releases",
+          "url": "https://github.com/microsoft/playwright/releases"
+        },
+        {
+          "title": "Browser Use releases",
+          "url": "https://github.com/browser-use/browser-use/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "RAGFlow新修复已另列详解；LightRAG v1.5.7无新增release。未对所有项目main做全面审计。",
+      "source_date": "截至2026-10-22核查",
+      "sources": [
+        {
+          "title": "LightRAG releases",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Claude Code新修复已收录；OpenAI Agents Python v0.24.0发布页相对上期无新增，不重复旧技巧。",
+      "source_date": "截至2026-10-22核查",
+      "sources": [
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "EGGHead为近期论文首次全文补收，真实提交日期10月16日，不是今天新发；本轮COLMAP 4.2.1、OpenMVS 2.4无已核实新版本，Gaussian-to-Mesh方向无符合本轮细读标准的新增。",
+      "source_date": "截至2026-10-22核查",
+      "sources": [
+        {
+          "title": "COLMAP releases",
+          "url": "https://github.com/colmap/colmap/releases"
+        },
+        {
+          "title": "OpenMVS releases",
+          "url": "https://github.com/cdcseacave/openMVS/releases"
+        }
+      ]
+    }
+  ]
+}
