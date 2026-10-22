@@ -1,0 +1,60 @@
+{
+  "id": "openai-service-tier-policy-20261021",
+  "title": "OpenAI 项目服务档位策略：把运行档位约束放在调用端之外",
+  "problem": "新增的是管理控制面，不是模型能力。以往应用选择服务档位与项目允许哪些档位是不同问题：多人维护的实验脚本或代理可能使用不同配置。10月21日更新允许在Platform项目设置中限定可用档位，组织设置还可以进一步统一限制。",
+  "inputs": "输入包括项目/组织允许档位策略，以及请求中显式填写、设为auto或省略的service_tier。这是推理调用治理，无新增训练数据或训练流程。前提是具备相应设置权限和可调用API的项目；官方未在这则更新中给出逐账户灰度名单。",
+  "outputs": "允许的请求进入正常后续处理；请求选定或解析出的档位不被允许时返回400 invalid_request_error，error.param指向service_tier。允许并不保证模型、额度或其他访问检查均通过。",
+  "pipeline": [
+    {
+      "title": "1. 配置策略输入",
+      "explanation": "管理员在Platform设置中检查组织与项目允许项。项目不能重新启用组织禁止的档位，输出的是调用侧必须遵守的有效限制。"
+    },
+    {
+      "title": "2. 解析请求档位",
+      "explanation": "应用提交请求；显式值直接参与检查，auto和省略参数也可能解析到受限档位。因此去掉参数不是可靠修复。"
+    },
+    {
+      "title": "3. 返回可诊断结果",
+      "explanation": "若档位被阻止，调用返回策略400。应用应将参数和项目关联信息记入去敏日志，由有权限人员更正配置，而非把它当作短暂拥塞循环重试。后半句为工程建议。"
+    },
+    {
+      "title": "4. 最小验证（建议，未执行）",
+      "explanation": "用专用测试项目和不含私人信息的短提示，分别请求已允许、已禁止、auto与省略参数四种情况。核对响应类型和error.param；测试组织限制覆盖项目设置的负例。不要在生产项目直接切换策略。"
+    }
+  ],
+  "mechanism": "官方文档明确策略覆盖default、flex、priority；fast按priority判断，Scale Tier在此项目策略之外。其工程价值是把可用服务档位的约束从客户端移至平台控制面，但不是总花费上限，也不是安全内容过滤。",
+  "results": [
+    {
+      "claim": "新增平台治理入口",
+      "evidence": "10月21日changelog宣布项目可选择服务档位，组织可对项目施加限制。没有发布数据集、对照实验、延迟改善或费用下降数字。",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "claim": "策略错误有明确接口语义",
+      "evidence": "错误指南给出HTTP400、invalid_request_error与service_tier参数定位，并说明自动解析的请求也会被拦截。这是文档契约，不是本次实测。",
+      "source": "https://developers.openai.com/api/docs/guides/error-codes"
+    }
+  ],
+  "limitations": [
+    "本次只读公开更新和错误指南，没有进入用户平台设置，没有更改策略或发送计费模型请求。",
+    "文档列举的档位范围不应自动外推到所有新档位或其他云供应商。",
+    "没有费用/延迟指标或论文实验表；无法据此声称成本降低了特定比例。",
+    "策略400与额度、网络、速率限制是不同故障，自动换档位可能违背原任务成本与时延要求。"
+  ],
+  "engineering_notes": [
+    "建议把允许档位加入实验配置清单，在启动阶段做兼容性检查；该建议不是官方新增SDK特性。",
+    "建议在重试分类器里将参数策略错误与瞬态错误分开；只有明确符合项目策略和业务授权时才降档重发。",
+    "建议记录实际使用档位与调用成本，比较治理前后的越界请求数量，而非假定模型质量会提升。"
+  ],
+  "sources": [
+    {
+      "title": "OpenAI API Changelog 10月21日",
+      "url": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "title": "Error codes：service_tier策略边界",
+      "url": "https://developers.openai.com/api/docs/guides/error-codes"
+    }
+  ],
+  "read_scope": "已阅读官方10月21日更新及错误指南service_tier专节；属于原始技术文档研读，不是论文全文研读。未实测账户开放范围或模型请求。"
+}
