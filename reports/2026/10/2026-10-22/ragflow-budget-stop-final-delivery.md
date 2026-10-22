@@ -1,0 +1,77 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-22
+---
+
+# RAGFlow 修复预算停止后答案随机丢失：计算取消不再等于投递取消
+
+来源日期：2026-10-21T12:20:48Z
+核查时点：2026-10-22T00:08:30Z（UTC）
+状态：公开来源研读草稿，未独立复现实验。
+
+## 核心问题
+Agentic RAG 为控制成本会取消运行上下文，然后用已取证据生成终止答案。旧 emitResult 同时等待写入结果和 runCtx.Done；预算已经触发时，两个分支都可能就绪，导致答案已经生成却未发给调用者。这不是召回或生成质量问题，而是异步结果交付协议错误。相对 10月21日报的 scored fallback，本次新增点是预算停止后的最终结果交付，不是再次介绍回退检索。
+
+## 输入
+无需训练。推理输入是用户问题和对话、已授权知识库范围、支持工具调用的模型、smart-reasoning 等模板以及 RAGFLOW_AGENTIC_TOKEN_BUDGET。服务保留外层请求 ctx，并建立带15分钟运行超时及 token 预算的 runCtx；默认预算为500000，非正值不启用预算。复现实验应固定模型、问题、知识库快照与预算。
+
+## 输出
+原有 AsyncChatResult 结构不变：中间增量、最终 Answer、Reference、Final=true、usage 与 elapsed_ms。修复目标是在调用方仍可接收时投递已经生成的终止结果，不保证答案正确，也不承诺客户端断线后仍能收到。
+
+## 分步流程
+
+### 1. 建立独立的请求与运行生命周期
+输入外层请求 ctx、知识库和模型配置。agenticRag 创建容量16的 out 通道，再从 ctx 派生 runCtx，附加检索身份、证据注册表、token预算和用量记录，输出可执行的智能检索环境。
+
+### 2. 检索与累计预算
+运行 ReAct 检索及工具调用，收集证据。ChargeTokens 以原子计数累计已消费token；达到限制后只触发一次 ErrTokenBudget 取消，使探索循环停止。计数发生在消费之后，因此预算不是绝对不超出的预付费硬上限。
+
+### 3. 回收已有答案或合成终止答案
+Run 优先尝试恢复本轮已经产生的助手答案；若最终结果仍为空或运行报错，使用问题、部分输出和累积证据执行 finalizeAnswer。合成上下文用 WithoutCancel 脱离运行取消，再单独附加90秒超时；证据输入有40000 rune上限。这是既有回退机制，不是本PR新引入。
+
+### 4. 优先投递，不用预算取消丢弃结果
+本次唯一变更集中在 emitResult：先非阻塞尝试 out <- result，缓冲可用就立即成功；只有缓冲暂满时再等待写入或外层 ctx.Done。旧实现使用的是已经被预算取消的 runCtx.Done，因而可随机选择丢弃分支。新实现区分计算结束和调用方离线。
+
+### 5. 最终载荷与调用方消费
+服务为最终答案整理引用与用量，发送 Final=true 的权威最终结果。客户端仍需持续消费通道及正确处理最终帧；缓冲满且请求已经取消时仍可终止等待。
+
+## 关键机制
+Go select 在多个就绪分支间选择；旧代码把预算取消也当作停止投递信号。补丁用一次带 default 的优先发送，再以外层请求上下文作阻塞等待的取消信号。因果链由PR差异、预算取消实现和合成回退调用链共同支持。这里没有新增模型、训练方法或新的检索算法，而是对 Agentic RAG 降级交付语义的修复。
+
+## 来源结果与证据
+
+### 作者报告修复前有已生成答案却返回空答的案例。
+PR描述：19个FRAMES问题批次的26次预算停止中，4次返回空answer；服务日志 final_bytes 显示仍有963–2155字节的最终答案。4/26约15.4%仅为该批样本比例。无论文表号，证据位置为PR Problem段。
+来源：https://github.com/infiniflow/ragflow/pull/21301
+
+### 作者报告修复后测试中未再次出现空答。
+PR Verification段称只携带此变更的二进制重新跑同一19问批次、每arm三遍，共169个agentic turn、73次预算停止、0次空答；并称 bash build.sh --test ./internal/service/ 通过。本次没有独立执行这些实验，不能把0/73当成生产零故障保证。
+来源：https://github.com/infiniflow/ragflow/pull/21301
+
+### 代码变更范围明确且已合并。
+GitHub原始PR及files接口显示2026-10-21T12:20:48Z合并，SHA e2401e54947db7eb5e542b6de26755d89886f783，仅修改internal/service/agentic_pipeline.go中的emitResult。nightly正文生成时间为2026-10-21T13:19:14+00:00，指向同一提交。
+来源：https://github.com/infiniflow/ragflow/commit/e2401e54947db7eb5e542b6de26755d89886f783
+
+## 局限与未知
+- 目前核验的是公开main提交和nightly，不代表已进入稳定版；升级前固定SHA，勿依赖可移动nightly标签。
+- PR未给完整FRAMES问题ID、模型及参数、预算值、知识库构建快照、每arm明确定义或逐次原始输出，作者数字不可视为完整可复现实验包；没有质量指标、延迟分位数或费用对比。
+- 只修复投递失败，不提高事实正确率、引用完整率或召回率；答案成功发送也可能证据不足。
+- 独立合成会继续消耗token，并可能在原请求取消后继续到自己的超时；此PR没有改写这套既有策略。
+- 本次仅源码阅读，没有安装、编译、压测或验证作者实验；未审阅仓库全部代码。
+
+## 工程建议（非复现结论）
+- 建议在预生产分别检验：预算停止但客户端仍连接、通道缓冲满、主动断开客户端、运行超时、模型生成失败。观察final_bytes>0而客户端answer为空的交付不一致指标，并同时统计Final帧数量。
+- 最小试用：固定含此补丁的SHA构建隔离实例，配置已有授权知识库和工具调用模型；运行服务包测试；对固定问题采用能触发预算停止但保留证据的预算；记录fired、final_bytes、最终载荷、usage以及延迟，流式与非流式都验证。不建议以生产资料做首次测试。
+- 把探索停止、回退生成和结果发送拆成不同状态及超时预算，并让用户看到预算停止标记。该建议可迁移到自研RAG/多智能体服务，不依赖选用RAGFlow。
+
+## 实际阅读范围
+已读原始PR全文与唯一变更文件diff；读取固定提交agentic_pipeline.go全文，并检查token_budget.go全文及agent.go中预算终止、恢复、合成和超时相关代码；打开nightly release正文核对提交与生成时间。没有论文可全文研读，也没有独立复现实验。
+
+## 原始来源
+- [RAGFlow PR #21301：预算停止后的最终答案投递修复](https://github.com/infiniflow/ragflow/pull/21301)
+- [固定提交：agentic_pipeline.go](https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/service/agentic_pipeline.go)
+- [固定提交：token_budget.go](https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/common/token_budget.go)
+- [固定提交：agent.go 终止回退](https://github.com/infiniflow/ragflow/blob/e2401e54947db7eb5e542b6de26755d89886f783/internal/agentic_rag/agent.go)
+- [RAGFlow nightly](https://github.com/infiniflow/ragflow/releases/tag/nightly)
