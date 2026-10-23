@@ -1,0 +1,219 @@
+{
+  "date": "2026-10-23",
+  "title": "AI 工程研究日报",
+  "edition_label": "决策接口 / 沙箱边界 / 文档结构 / 多视图修复",
+  "summary": "本期研读新的决策API用法、代理沙箱边界、文档结构化转换和稀疏多视图人物修复论文。分别标明正式可用、源码合入及代码待开放，重点判断能否接入工程，而非罗列宣传指标。",
+  "notice": "对照2026-10-22并回看10月9日至22日14期去重。来源日期与北京时间可能跨日，逐条注明真实时点；本文为公开来源研究草稿，未运行模型、云API或业务实验，不将作者结果当作独立复现。",
+  "verified_at": "2026-10-23T00:09:00Z",
+  "items": [
+    {
+      "id": "openai-decisions-ga-shared-evidence-20261022",
+      "category": "大模型前沿用法",
+      "title": "Decisions GA：把共享证据与独立判定拆开，再验证缓存是否真正命中",
+      "finding": "10月22日官方宣布GA，新增共享输入缓存、问题级图片与input_json，单请求上限由200题升至400题。不同于此前Live接入，本次改变的是判定请求的组织方式。",
+      "relevance": "适合文档筛选、RAG候选证据检查和图片质检中的窄判定；可把固定参考材料与不断变化的待评对象分开，而不是反复生成长篇回答。",
+      "action": "先用合成参考材料和少量独立问题建立对照，记录逐题误判、拒答、延迟与缓存计数，再决定是否扩大批量。",
+      "caveat": "400是问题上限，不是质量保证。Decisions当前接口只列30m缓存TTL，不能套用上一期Responses的12h；本轮未调用API。",
+      "recency_label": "10月22日GA及接口增量；未本地复现",
+      "source_date": "2026-10-22（官方API Changelog）",
+      "sources": [
+        {
+          "title": "OpenAI API Changelog：10月22日 Decisions GA",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Decisions 官方指南：共享输入、问题级图片与缓存",
+          "url": "https://developers.openai.com/api/docs/guides/decisions"
+        },
+        {
+          "title": "Create a decision：参数、TTL和返回类型",
+          "url": "https://developers.openai.com/api/reference/resources/decisions/methods/create"
+        },
+        {
+          "title": "组织 Decisions Usage 接口",
+          "url": "https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/decisions"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-23/openai-decisions-ga-shared-evidence-20261022.md"
+    },
+    {
+      "id": "claude-code-21309-sandbox-boundaries",
+      "category": "智能体 / 应用",
+      "title": "Claude Code v2.1.309：把沙箱验收前移到启动文件和配置路径",
+      "finding": "10月22日发布，修复沙箱命令启动前的shell启动文件执行边界、macOS符号链接下denyWrite通配规则，以及--mcp-config文件写保护。",
+      "relevance": "科研代理常在带dotfiles、MCP配置和符号链接的开发环境运行。只检查最终命令是否受限，可能漏掉命令之前或配置层的副作用。",
+      "action": "在一次性测试环境重新验收启动阶段、真实路径、配置保护；用无秘密的标记文件检测副作用，不在生产目录尝试绕过。",
+      "caveat": "这是维护者已发布的修复说明，不是完整隔离证明；本轮未安装或复现。内置Bash沙箱不覆盖所有工具和辅助进程。",
+      "recency_label": "已发布边界修复；需隔离环境验收",
+      "source_date": "2026-10-22 22:18 UTC（北京时间10月23日06:18），v2.1.309发布页",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.309 官方发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.309"
+        },
+        {
+          "title": "Claude Code 沙箱配置与边界",
+          "url": "https://code.claude.com/docs/en/sandboxing"
+        },
+        {
+          "title": "Claude Code 设置来源与优先级",
+          "url": "https://code.claude.com/docs/en/settings"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-23/claude-code-21309-sandbox-boundaries.md"
+    },
+    {
+      "id": "markitdown-docintel-structured-20261022",
+      "category": "采集 / 工具",
+      "title": "MarkItDown：新增文档模型选择、查询字段和结构化输出",
+      "finding": "10月22日 main 合入 #1913：Document Intelligence 集成扩展为可选模型、按需 add-on 和 query fields；提取字段随 Markdown 输出为 YAML，保留多文档边界。属于源码合入，不直接等同当前稳定安装包。",
+      "relevance": "为文档入库提供正文之外的可解析元数据；重点是避免多文档同名字段覆盖，并控制云调用与收费功能。",
+      "action": "固定提交，用公开样本比较默认布局、指定模型和查询字段；检查字段类型、空文档位置与原文对应关系，再评估入库。",
+      "caveat": "文件会发送 Azure；基础分析与部分 add-on 可计费。本次未调用服务或运行测试，不宣称准确率提升。",
+      "recency_label": "已合入main；不在v0.1.9内",
+      "source_date": "2026-10-22T22:31:47Z（北京时间10月23日06:31）",
+      "sources": [
+        {
+          "title": "10月22日官方合并提交 #1913",
+          "url": "https://github.com/microsoft/markitdown/commit/7482c092d9c0074a89803c9fdb63a969e7fe17fc"
+        },
+        {
+          "title": "固定提交 README",
+          "url": "https://github.com/microsoft/markitdown/blob/7482c092d9c0074a89803c9fdb63a969e7fe17fc/README.md"
+        },
+        {
+          "title": "转换器完整源码",
+          "url": "https://github.com/microsoft/markitdown/blob/7482c092d9c0074a89803c9fdb63a969e7fe17fc/packages/markitdown/src/markitdown/converters/_doc_intel_converter.py"
+        },
+        {
+          "title": "新增无网络单元测试",
+          "url": "https://github.com/microsoft/markitdown/blob/7482c092d9c0074a89803c9fdb63a969e7fe17fc/packages/markitdown/tests/test_docintel_converter.py"
+        },
+        {
+          "title": "Azure add-on 支持与计费边界",
+          "url": "https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/concept/add-on-capabilities?view=doc-intel-4.0.0"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-23/markitdown-docintel-structured-20261022.md"
+    },
+    {
+      "id": "realme-sparse-capture-4d-enhancement",
+      "category": "数字人 / 几何",
+      "title": "RealMe：先联合增强多视角视频，再重建4DGS；尚非可运行发布",
+      "finding": "10月22日公告的RealMe用带时间/视角位置编码的扩散模型，联合增强稀疏采集与粗4DGS渲染，再回流监督4DGS。新视角画质有改善，但输出不是Mesh，代码仍在内部审查。",
+      "relevance": "对数字人多视角素材增强有价值：重点不是逐帧变清晰，而是防止不同视角各自“补细节”后破坏重建一致性。对固定GS→摄影测量Mesh路线，只能借鉴验证方法，不能直接替换后端。",
+      "action": "列为方法观察，不安排即装即跑；待实现可取后，固定原始相机与真实留出视角，比较未经增强、逐视角增强、联合增强三路，并独立验收几何。",
+      "caveat": "作者结果未复现；单H100处理4帧2K扩散需135.1秒/48.1GB，尚未包含重建。TWE不及FTGS；一致性指标不是几何精度。组织项目使用还需核对PRL注册条件和上游许可。",
+      "recency_label": "2026-10-22新公告 · 10月21日提交 · 本轮首次收录",
+      "source_date": "2026-10-21 16:49:14 UTC（v1）；2026-10-22公告",
+      "sources": [
+        {
+          "title": "RealMe v1 原始论文：正文、表1–8和附录A–D",
+          "url": "https://arxiv.org/html/2610.30023v1"
+        },
+        {
+          "title": "arXiv 原始提交记录：2026-10-21 16:49:14 UTC",
+          "url": "https://arxiv.org/abs/2610.30023"
+        },
+        {
+          "title": "作者项目页：方法、演示与数据状态",
+          "url": "https://zju3dv.github.io/realme/"
+        },
+        {
+          "title": "官方仓库：代码仍在内部审查",
+          "url": "https://github.com/zju3dv/RealMe"
+        },
+        {
+          "title": "官方 PRL v1.0 许可原文",
+          "url": "https://raw.githubusercontent.com/zju3dv/RealMe/main/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-23/realme-sparse-capture-4d-enhancement.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "OpenAI Decisions GA已另列深读；10月21日服务档位治理及10月20日12h缓存已在前期收录，不重复。Claude另于10月22日宣布Anthropic-managed Google Cloud接入，已核实官方文档，属于访问与计费路径变化，暂不扩成第三条。",
+      "source_date": "截至2026-10-23 00:07 UTC核查",
+      "sources": [
+        {
+          "title": "OpenAI API Changelog：10月22日 Decisions GA",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform 10月22日发布说明",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Claude Anthropic-managed Google Cloud接入",
+          "url": "https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/anthropic-managed"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Claude Code v2.1.309已另列深读；同日v2.1.308仅给出一般修复说明，不据此编造机制。OpenAI Agents Python仍为v0.24.0，没有核实到新增release；未据此断言main无变化。",
+      "source_date": "截至2026-10-23 00:07 UTC核查",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.309 官方发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.309"
+        },
+        {
+          "title": "Claude Code v2.1.308",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.308"
+        },
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本期没有新增达到完整研读标准的独立RAG条目。核查RAGFlow10月22日提交清单可见多项接口/状态修复，但未逐项深入验证，不把清单当作已证实改进；LightRAG最新release仍为1.5.7。文档入库相关增量见MarkItDown详解。",
+      "source_date": "截至2026-10-23核查",
+      "sources": [
+        {
+          "title": "RAGFlow 10月22日原始提交清单",
+          "url": "https://api.github.com/repos/infiniflow/ragflow/commits?since=2026-10-21T23:00:00Z&until=2026-10-23T00:00:00Z&per_page=100"
+        },
+        {
+          "title": "LightRAG releases",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "RealMe新公告首次细读，不是可运行代码发布；Gaussian-to-Mesh未新增合格条目。COLMAP稳定版仍为4.2.1；OpenMVS网页缓存过旧，不能据此判断近期无提交。",
+      "source_date": "截至2026-10-23核查",
+      "sources": [
+        {
+          "title": "RealMe论文",
+          "url": "https://arxiv.org/abs/2610.30023"
+        },
+        {
+          "title": "COLMAP releases",
+          "url": "https://github.com/colmap/colmap/releases"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "MarkItDown新源码能力已另列。v0.1.9早于该提交，不包含它；Crawl4AI最新release仍为0.9.5，限定时窗内main提交查询为空。工具支持不赋予采集或上传授权。",
+      "source_date": "截至2026-10-23核查",
+      "sources": [
+        {
+          "title": "MarkItDown v0.1.9",
+          "url": "https://github.com/microsoft/markitdown/releases/tag/v0.1.9"
+        },
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        }
+      ]
+    }
+  ]
+}
