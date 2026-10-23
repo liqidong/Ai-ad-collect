@@ -1,0 +1,80 @@
+{
+  "id": "openai-decisions-ga-shared-evidence-20261022",
+  "title": "Decisions GA：共享证据、局部图片与可观察缓存的组合",
+  "problem": "工程问题：同一套参考材料往往需要反复回答多个窄问题。把每次评估都写成独立长提示，既重复输入，也不便核对判定与来源。本条关注GA新增的请求结构；10月17日已介绍的Live原生调用不再重讲。",
+  "inputs": "来源事实：请求包括model、共享input和questions；可组合文本、图像及结构化JSON。工程建议：给每个样本、问题和参考材料版本分配稳定ID，不让返回结果只能依赖列表位置识别。",
+  "outputs": "来源事实：answers包含predicate、choice或score，也可能某一题单独refusal。工程建议：验收产物应保留逐题结果和拒答分支，而非只输出一个平均分；判定结果不等于授权执行后续动作。",
+  "pipeline": [
+    {
+      "title": "1. 先定义可核对的窄任务",
+      "explanation": "工程建议：从现有RAG或质检工作里挑一类人工可判定的问题，如“候选段落是否直接支持指定事实”。准备正例、相似但不支持的反例及信息不足样本，先制定标签和误判代价。不要把模型自报概率当作已经校准的事实置信度。"
+    },
+    {
+      "title": "2. 分离共享证据和局部问题",
+      "explanation": "来源事实：问题instructions可直接容纳文本/图片内容块；共享参考放input，问题图片不进入可复用缓存前缀。工程建议：保留相同参考材料，逐题更换候选；另设一个全部材料直接拼接的基线，比较输入组织变化是否影响判断。不要将同一批内其他问题的答案当作本题已知条件。"
+    },
+    {
+      "title": "3. 明确缓存边界",
+      "explanation": "来源事实：默认在共享input末尾设隐式断点，复用前缀需至少1024 tokens；显式模式无断点则不缓存。工程建议：做相同前缀、修改前缀、显式无断点三组测试，固定其余条件。短输入无需为了达到门槛填充无用文本。先证实复用成立，再谈成本优化。"
+    },
+    {
+      "title": "4. 独立校验数据与返回分支",
+      "explanation": "来源事实：input_json放在user内容中；接口对JSON结构和大小设限。工程建议：在本地先校验样本格式和唯一问题名；用保存的模拟响应覆盖正常、部分拒答、网络失败三条分支。拒答和请求失败不能转换成“条件为假”或零分。"
+    },
+    {
+      "title": "5. 分别计算质量和运行收益",
+      "explanation": "工程建议：先用小样本测逐题准确率与人工复核量，再在同一数据上逐渐增加问题数。单独报告冷缓存/热缓存延迟、实际输入量和费用，不把题数翻倍直接说成吞吐翻倍。有先后依赖的判定分成不同请求，并保留每步证据。"
+    }
+  ],
+  "mechanism": "接口层的关键是“共享证据”与“各题判定”分离：变化留在问题侧，稳定前缀才有复用机会。这是根据公开契约作出的工程解读，不代表已获知内部推理并行方式、注意力结构或缓存调度算法。JSON输入减少手工字符串封装，但不会让判定自动获得数据库验证能力。",
+  "results": [
+    {
+      "claim": "GA新增项有明确发布日期",
+      "evidence": "10月22日Changelog列出共享缓存、问题级图片、JSON输入和400题上限。本条只将这些作为本期增量，不把指南中所有能力都称为当天新发。",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "claim": "缓存TTL不能跨接口照搬",
+      "evidence": "创建接口目前把prompt_cache_options.ttl限定为30m。它与此前Responses的12h选项不同，应以端点契约验收。",
+      "source": "https://developers.openai.com/api/reference/resources/decisions/methods/create"
+    },
+    {
+      "claim": "可观测性不等于效果验证",
+      "evidence": "指南给出缓存读写计数字段；组织Usage接口可汇总请求量。本轮未运行基准，官方约10x速度表述不作为实测结论，也无本地准确率提升数字。",
+      "source": "https://developers.openai.com/api/docs/guides/decisions"
+    }
+  ],
+  "limitations": [
+    "尚无本轮任务级评测；质量、概率校准、缓存收益和尾延迟均需真实工作负载验证。",
+    "只支持gpt-6-luna；固定类别判定不替代自由结构抽取、长解释或工具调用。",
+    "问题级图片仍受请求图像限制；400题上限不能解释成400张任意大小图片都可接受。",
+    "输入JSON最多32层容器、10000个值、256KiB紧凑UTF-8；这些是接口约束，不是推荐批量。",
+    "本轮没有购买额度、创建密钥、上传私人资料或发推理请求。"
+  ],
+  "engineering_notes": [
+    "最小试用建议：在已获准测试项目用一份合成参考文本、两道独立predicate题，先检查answers分支，再重复请求并观察usage；保持无外部副作用。",
+    "费用统计建议：缓存读写计数属于input_tokens的组成，不应再次加到总量；将请求数与题数分开记录。",
+    "适用性建议：先用于低风险筛选和人工复核排序，不让一个未经校准的阈值直接触发高影响决策。",
+    "官方10月22日宣布GA；当前文档只支持gpt-6-luna。可用性受账户、区域和速率限制约束，未核查个人账户。",
+    "建议先跑两题的合成样本和冷/热缓存对照，再做批量；本轮仅设计，未执行。"
+  ],
+  "sources": [
+    {
+      "title": "OpenAI API Changelog：10月22日 Decisions GA",
+      "url": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "title": "Decisions 官方指南：共享输入、问题级图片与缓存",
+      "url": "https://developers.openai.com/api/docs/guides/decisions"
+    },
+    {
+      "title": "Create a decision：参数、TTL和返回类型",
+      "url": "https://developers.openai.com/api/reference/resources/decisions/methods/create"
+    },
+    {
+      "title": "组织 Decisions Usage 接口",
+      "url": "https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/decisions"
+    }
+  ],
+  "read_scope": "深读官方Decisions指南的新增项、I/O、JSON、问题级图片、多题、缓存、用量与可用性章节；核验创建接口的类型、JSON限额、拒答与30m TTL，并打开组织Usage参考。未逐语言运行SDK示例，未声称审计后端实现。核查于2026-10-23 UTC。"
+}
