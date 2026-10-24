@@ -1,0 +1,261 @@
+{
+  "date": "2026-10-24",
+  "title": "AI 工程研究日报",
+  "edition_label": "事件监视开放 / 重解析配置 / 图像边界 / 薄曲面取舍",
+  "summary": "本期记录Claude Code事件监视的新开放范围，以及RAGFlow重解析配置和PDF图像边界的源码增量；补收H-2DGS全文，明确薄表面与画质的取舍，不将深度自一致当成真实几何精度。",
+  "notice": "对照2026-10-23并回看10月9日至23日15期去重。前三条为上期后工程增量；H-2DGS是此前已公告论文的首次细读补收，不冒充今日首发。全部为公开来源研究草稿，未运行模型、安装软件、调用云API或复现实验；官方文档矛盾和未披露设置均保留。",
+  "verified_at": "2026-10-24T00:08:34Z",
+  "items": [
+    {
+      "id": "claude-code-21310-monitor-providers",
+      "category": "大模型前沿用法",
+      "title": "Claude Code v2.1.310：把事件监视扩到第三方云，先验收停止与权限边界",
+      "finding": "v2.1.310 将已有 Monitor 工具及插件 monitors 扩展到 Bedrock、Vertex、Foundry，以及关闭遥测或非必要流量的配置；这些场景也开始阻止长时间前台 sleep。新增的是可用范围，不是首次发明后台事件监视。",
+      "relevance": "适合已用这些部署方式等待 CI、构建或日志变化的代理。可将“每轮问模型要不要再查”改成脚本过滤事件后再通知，但底层脚本仍可能轮询，不能据此宣称零轮询或量化降本。",
+      "action": "在测试目录保留原有隐私设置，用 2 分钟合成日志验证工具可见、事件到达、超时及主动停止；先试临时 Monitor，再考虑自动启动的插件监视器。不接生产日志、不自动修复。",
+      "caveat": "官方发布说明已更新，Tools/Plugin 文档仍保留旧平台限制，账号实用性未测试。插件 monitors 仍标实验性、只适用于交互会话，并在沙箱外以用户权限运行；不能把禁用插件等同于立即停进程。",
+      "recency_label": "新增开放范围｜上海时间 10/24 07:39 正式版",
+      "source_date": "2026-10-23 23:39:00 UTC（Asia/Shanghai：2026-10-24 07:39:00）",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.310：正式版发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.310"
+        },
+        {
+          "title": "Claude Code Tools reference：Monitor 工具、期限与权限",
+          "url": "https://code.claude.com/docs/en/tools-reference#monitor-tool"
+        },
+        {
+          "title": "Claude Code Plugin components：Monitors 运行生命周期",
+          "url": "https://code.claude.com/docs/en/plugins/components#monitors"
+        },
+        {
+          "title": "Claude Code Plugin security：插件自身代码不受工具沙箱保护",
+          "url": "https://code.claude.com/docs/en/plugins/security"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-24/claude-code-21310-monitor-providers.md"
+    },
+    {
+      "id": "ragflow-applykb-reparse-config-20261023",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow重解析补齐配置传递：apply_kb不再只是被接口接收",
+      "finding": "10月23日合并#20149：请求apply_kb后，先把知识库模型及元数据设置写入文档已有Extractor/Compiler节点，再持久化并排队；显式指定的节点模型保留。",
+      "relevance": "适合知识库调整自动元数据或默认抽取模型后重解析旧文档的场景。应验收实际入库配置，而不只看API成功或任务完成。",
+      "action": "在隔离库使用固定nightly SHA，检查apply_kb开/关、空模型/锁定模型、元数据启用/禁用及写库失败；读取数据库和消费者配置确认生效。",
+      "caveat": "仅main及10月23日nightly确认包含，不把同日v0.27.3当作承载版本；不重写整条pipeline，不创建缺失节点。作者报告9/9回归通过，本轮未复现，无RAG质量基准。",
+      "recency_label": "2026-10-23合并；当日nightly已包含",
+      "source_date": "2026-10-23T11:55:08Z",
+      "sources": [
+        {
+          "title": "RAGFlow #20149：问题、合并状态、9/9本地回归说明",
+          "url": "https://github.com/infiniflow/ragflow/pull/20149"
+        },
+        {
+          "title": "已合并差异：6个文件",
+          "url": "https://github.com/infiniflow/ragflow/pull/20149/files"
+        },
+        {
+          "title": "固定SHA：重解析应用配置并在排队前持久化",
+          "url": "https://github.com/infiniflow/ragflow/blob/66bd0554b394970833b7404932428ac2297aa8ce/internal/service/document/document_parse.go"
+        },
+        {
+          "title": "nightly发布记录",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/nightly"
+        },
+        {
+          "title": "与v0.27.3的分叉关系",
+          "url": "https://github.com/infiniflow/ragflow/compare/66bd0554b394970833b7404932428ac2297aa8ce...v0.27.3"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-24/ragflow-applykb-reparse-config-20261023.md"
+    },
+    {
+      "id": "ragflow-deepdoc-figure-bounds-20261023",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow保留PDF完整图像框：别把识别到的几个字当成整张图",
+      "finding": "10月23日#21390把DLA整图几何一直保留到section与裁图入口，纯图不再因无文字提前丢失；#21412再将媒体chunk预览从文字上下文裁剪路径分开。",
+      "relevance": "针对技术PDF的电路图、流程图、公式和图表入库，可避免预览只剩内部标签或夹带上下文暗带。它修复证据输入，不直接证明问答效果更好。",
+      "action": "用包含稀疏标签图、纯图和跨页媒体的授权PDF，对固定SHA前后检查边界、页号、预览和最终chunk；分别启用/禁用图注、上下文及VLM，确认纯图不会被误当作自动可检索。",
+      "caveat": "main/nightly修复；DLA错误仍会传递。没有文本、图注、上下文或VLM描述的图仍被后续索引过滤；去暗带仅媒体chunk预览路径，不代表所有VLM裁图都变化。未复现。",
+      "recency_label": "2026-10-23合并两项相关修复；当日nightly已包含",
+      "source_date": "2026-10-23T09:06:47Z；2026-10-23T11:09:59Z",
+      "sources": [
+        {
+          "title": "RAGFlow #21390：完整PDF图像边界、范围与行为说明",
+          "url": "https://github.com/infiniflow/ragflow/pull/21390"
+        },
+        {
+          "title": "完整图像框修复的13文件差异与测试",
+          "url": "https://github.com/infiniflow/ragflow/pull/21390/files"
+        },
+        {
+          "title": "RAGFlow #21412：媒体预览不再带上下文暗带",
+          "url": "https://github.com/infiniflow/ragflow/pull/21412"
+        },
+        {
+          "title": "媒体预览修复已在nightly祖先链",
+          "url": "https://github.com/infiniflow/ragflow/compare/651a1c65fce44a15a1612cd6a8e0b97cf177d2bc...a55dccee4c211046b4e4d216a538bc60fae78dfd"
+        },
+        {
+          "title": "nightly发布记录",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/nightly"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-24/ragflow-deepdoc-figure-bounds-20261023.md"
+    },
+    {
+      "id": "h2dgs-thin-surface-2610-30910",
+      "category": "数字人 / 几何",
+      "title": "H-2DGS：先收缩再融合，显式曲面有画质代价",
+      "finding": "论文先收缩3DGS射线密度，再用TSDF建立高度场曲面。作者表1显示深度自一致改善，但训练视图PSNR/SSIM全面低于对照。",
+      "relevance": "可参考GS到表面转换中“先稳定深度再建表面”的训练设计；不是已验证的人脸Mesh方案。",
+      "action": "列为机制观察：有独立几何真值时，再测试收缩前后的轮廓、表面误差与画质取舍。",
+      "caveat": "专域小样本，MVDC不等于真值几何精度；尚无已核官方代码，未复现，非即装即用Mesh转换器。",
+      "recency_label": "10月23日公告 · 本期首次细读补收",
+      "source_date": "2026-10-22 08:33 UTC提交；2026-10-23公告",
+      "sources": [
+        {
+          "title": "H-2DGS：原论文摘要与v1提交历史",
+          "url": "https://arxiv.org/abs/2610.30910"
+        },
+        {
+          "title": "H-2DGS：全文方法、表1与讨论",
+          "url": "https://arxiv.org/html/2610.30910v1"
+        },
+        {
+          "title": "arXiv cs.GR 2026-10-23公告目录",
+          "url": "https://arxiv.org/list/cs.GR/new?show=2000"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-24/h2dgs-thin-surface-2610-30910.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "大模型前沿用法",
+      "status": "本栏新增Claude Code v2.1.310的Monitor可用范围详解，属于实际使用机制的开放变化，不是旧概念换名。OpenAI API changelog最新可见仍为10/22 Decisions GA，Claude Platform最新仍为10/22 Anthropic-managed Google Cloud，均在上期已核查；不重复10/21 API迁移与服务档位、10/20缓存和推理钩子。",
+      "source_date": "截至 2026-10-24 00:04 UTC 核查",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Monitor开放变化见大模型前沿用法。本栏无额外独立新增：OpenAI Agents Python最新发布仍为v0.24.0（10/15），JavaScript最新仍为0.21.0（10/20）。只核查releases，不声称主分支没有变化。",
+      "source_date": "截至 2026-10-24 00:04 UTC 核查",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.310：正式版发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.310"
+        },
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        },
+        {
+          "title": "OpenAI Agents JavaScript releases",
+          "url": "https://github.com/openai/openai-agents-js/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "RAGFlow默认分支在2026-10-23 UTC有48条提交，精选两组完成源码和测试深读的配置/解析增量，未把标题清单写成能力声明。官方另于10月23日发布v0.27.3，标签8090ffd8；该维护分支与本期三条main修复提交分叉，未将它们归入该稳定版。#21377为109文件的权限大改，本轮仅读PR元数据和说明，未进行完整安全审计，因此不作已核实安全改善卡。",
+      "source_date": "2026-10-23",
+      "sources": [
+        {
+          "title": "RAGFlow当日48条默认分支提交",
+          "url": "https://api.github.com/repos/infiniflow/ragflow/commits?per_page=100&since=2026-10-23T00:00:00Z&until=2026-10-24T00:00:00Z"
+        },
+        {
+          "title": "RAGFlow v0.27.3发布",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/v0.27.3"
+        },
+        {
+          "title": "权限改动#21377：仅元数据筛查",
+          "url": "https://github.com/infiniflow/ragflow/pull/21377"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "LightRAG官方最新release仍为v1.5.7（2026-09-02 07:23:55 UTC）。默认分支since=2026-10-21T00:00:00Z查询为空，不声称所有分支/PR均无活动；未新增卡。",
+      "source_date": "截至2026-10-24核查",
+      "sources": [
+        {
+          "title": "LightRAG releases",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        },
+        {
+          "title": "LightRAG默认分支时间窗查询",
+          "url": "https://api.github.com/repos/HKUDS/LightRAG/commits?per_page=40&since=2026-10-21T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Crawl4AI最新release仍为v0.9.5（2026-10-14 10:25:39 UTC），默认分支自10月21日UTC的查询为空。MarkItDown最新release仍为v0.1.9（10月21日19:40:32 UTC），最新默认分支提交仍是10月22日#1913，10月23日已收录，未重复。仅对这两个采集/转换项目核验发布及默认分支窗口，不代表全网无新工具。",
+      "source_date": "截至2026-10-24核查",
+      "sources": [
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Crawl4AI默认分支时间窗查询",
+          "url": "https://api.github.com/repos/unclecode/crawl4ai/commits?per_page=40&since=2026-10-21T00:00:00Z"
+        },
+        {
+          "title": "MarkItDown v0.1.9",
+          "url": "https://github.com/microsoft/markitdown/releases/tag/v0.1.9"
+        },
+        {
+          "title": "MarkItDown默认分支时间窗查询",
+          "url": "https://api.github.com/repos/microsoft/markitdown/commits?per_page=40&since=2026-10-21T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "对照10月9日至23日15期去重；检索10月23日cs.CV与cs.GR公告的avatar/head/face/Gaussian/mesh候选，全文细读H-2DGS后作为跨域几何机制观察补收。没有将其写成上期之后首发，亦没有宣称本领域全网无其它新增。未重复RealMe、EGGHead、Video Diffusion Avatars。",
+      "sources": [
+        {
+          "title": "arXiv cs.CV 10月23日新公告目录",
+          "url": "https://arxiv.org/list/cs.CV/new?show=2000"
+        },
+        {
+          "title": "arXiv cs.GR 10月23日新公告目录",
+          "url": "https://arxiv.org/list/cs.GR/new?show=2000"
+        }
+      ],
+      "source_date": "截至2026-10-24 00:07 UTC核查；H-2DGS为10/22提交、10/23公告"
+    },
+    {
+      "category": "数字人 / 几何",
+      "status": "虽然2026-10-22首次提交arXiv，正文与官方作者仓库均标SIGGRAPH 2025；仓库记录2025-08-14已开放训练、推理和checkpoint。属于旧工作迟上传，不当新增算法填数。 核查摘要、全文首页会议信息、作者仓库README日期，不称全文细读。",
+      "source_date": "2025年工作；2026-10-22 arXiv提交",
+      "sources": [
+        {
+          "title": "论文提交记录",
+          "url": "https://arxiv.org/abs/2610.30619"
+        },
+        {
+          "title": "正文会议信息",
+          "url": "https://arxiv.org/html/2610.30619v1"
+        },
+        {
+          "title": "官方作者仓库与2025年开放日志",
+          "url": "https://github.com/IGLICT/GSHeadRelight"
+        }
+      ]
+    }
+  ]
+}
