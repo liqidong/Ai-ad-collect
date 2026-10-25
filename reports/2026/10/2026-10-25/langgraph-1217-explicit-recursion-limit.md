@@ -1,0 +1,110 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-25
+---
+
+# LangGraph 1.2.17：显式循环上限不再被默认值吞掉
+
+核查时间：2026-10-25T00:05:47Z。公开研究草稿；不是独立复现实验或采用结论。
+
+## 核心问题与现有瓶颈
+
+旧版LangGraph用recursion_limit是否等于DEFAULT_RECURSION_LIMIT来推断用户是否设置了上限，却无法区分ensure_config自动补入的默认值和用户显式传入的同值整数。当LANGGRAPH_DEFAULT_RECURSION_LIMIT=1000时，已绑定5000或9999的图再显式设置1000会被静默忽略。该问题影响循环型检索、反思和工具代理的终止边界，但不是RAG质量问题。#9417于2026-10-24 00:56:20 UTC合入，1.2.17于01:08:05 UTC正式发布，晚于本期检索窗口起点（2026-10-24 00:12 UTC）。
+
+## 输入
+
+此前已经绑定recursion_limit的编译图；后续with_config字典或关键字、父子图/RemoteGraph等合并路径传入的RunnableConfig；启动时LANGGRAPH_DEFAULT_RECURSION_LIMIT环境值。没有新增API。隔离验收应使用无外部模型、网络或付费工具的最小图。
+
+## 输出
+
+仍输出标准RunnableConfig和按合并配置执行的图。用户显式整数即使数值等于环境默认值也覆盖旧上限；自动补入的默认值仍不得放宽已绑定的小上限。本版本没有新增索引格式、检索文档或RAG节点。recursion_limit约束图supersteps，不直接约束token、金额或单节点内部工具循环。
+
+## 分步流程
+
+### 1. 读取默认值并保留来源标记
+
+发布tag 1.2.17定义私有_DefaultRecursionLimit(int)子类。LANGGRAPH_DEFAULT_RECURSION_LIMIT仍被转换为整数兼容值，未设时源码默认数值为10007。ensure_config没有收到显式上限时填入此子类实例。
+
+### 2. 合并时区分自动值与显式值
+
+merge_configs遇到recursion_limit时跳过_DefaultRecursionLimit类型，而不是跳过数值相同的所有整数。普通int即使恰好等于默认值，也能覆盖先前绑定的5000/9999。自动默认值则不会覆盖子图已经绑定的50。
+
+### 3. 让复制后的默认值仍保留语义
+
+使用isinstance类型判断而非对象身份判断。deepcopy或pickle往返会重建对象，类型标记仍保留，从而继续识别自动补入的默认值。提交说明曾概括成跳过确切对象，但PR差异及发布源码明确为类型判断，应以代码为准。
+
+### 4. 验证配置覆盖顺序
+
+官方新增测试检查with_config关键字、字典、关键字覆盖字典，以及后续只添加tags四条路径；另检查显式普通整数等于默认值仍覆盖50，自动默认值原样/deepcopy/pickle后都不覆盖50。它们主要断言配置结果，不等同完整生产循环验证。
+
+### 5. 独立验收运行停止边界
+
+建议对比1.2.16和1.2.17：进程启动前设环境默认1000，将原先绑定5000/9999的图显式设为1000并检查最终配置；实际执行使用缩小的无外部调用循环，例如默认5、先绑定9再显式设5，确认5个supersteps边界停止。不要为复现9999运行付费生产Agent。
+
+### 6. 同版附带修正远程事件归属
+
+#9401删除RemoteGraph.stream/astream在subgraphs分支的第二次命名空间解析，避免覆盖已经拼接的调用者前缀。调用者outer:123、远端values|sub:abc应输出(outer:123, sub:abc)，远端根事件应输出(outer:123)。该修复10/23 23:24 UTC已合入，本轮新增是随1.2.17正式可用，不另列为今日首次修复。
+
+## 关键机制
+
+核心是把值与来源拆开：同一个整数1000可以来自调用者的显式覆盖，也可以来自配置规范化自动填充。用私有int子类携带默认来源标记，使下游保留整数兼容性，又不必靠数值相等猜测意图。简单删除旧比较虽然能让1000生效，却可能使自动默认值覆盖已绑定50，破坏子图限制；因此两个不变量必须同时成立。对于混合LangChain包装层、父子图和RemoteGraph的系统，应沿最终配置传递路径逐边界检查，不能只看一次with_config成功。与上期RAGFlow预算停止后投递答案的修复不同，本条修复配置覆盖语义，不保证停止后最终结果投递。
+
+## 来源事实与报告结果
+
+- 1.2.17已正式发布，不只是主分支合并。
+  - 证据：#9417于2026-10-24 00:56:20 UTC合并；1.2.17于01:08:05 UTC发布。固定tag配置源码包含_DefaultRecursionLimit与isinstance判断，正式发布提交为4c52e129eb1ab69a3da58b799f67929f77d81149，publish和mark-release均成功。
+  - [原始来源](https://github.com/langchain-ai/langgraph/releases/tag/1.2.17)
+- 存在明确的环境默认值触发复现，但生产调用次数来自报告者而非本轮实验。
+  - 证据：Issue #9416报告1.2.16中先绑5000再设1000：默认未设时得到1000，默认设1000时仍5000；create_deep_agent原绑9999时仍9999。报告者的自托管循环约跑9999 supersteps、5000次模型调用，本轮未复现且不能推广为superstep与模型调用固定比例。
+  - [原始来源](https://github.com/langchain-ai/langgraph/issues/9416)
+- 回归覆盖了显式默认值和默认配置复制后的关键分支。
+  - 证据：新增测试断言四种with_config覆盖路径、普通int等于默认值仍覆盖50，以及ensure_config默认配置在原样/deepcopy/pickle三种情况下都保留已有50。测试主要验证合并结果，不提供大规模生产Agent或RAG质量基准。
+  - [原始来源](https://github.com/langchain-ai/langgraph/pull/9417/files)
+- 实际发布提交的核心测试已通过，不能把较早取消任务误当作当前发布失败。
+  - 证据：早一轮合并提交CI聚合为failure，包含被取消的Python3.13核心测试和两个Postgres测试；后续实际发布提交的CI Success为success，langgraph Python3.10、3.11、3.12、3.13、3.14测试与lint全成功。
+  - [原始来源](https://github.com/langchain-ai/langgraph/actions/runs/40047946864)
+- RemoteGraph同步与异步子图流保留调用者前缀。
+  - 证据：#9401删除第二次event名称解析，新增模拟客户端测试验证子图事件保留outer:123与sub:abc、根事件保留outer:123。它帮助事件归属和日志关联，不是访问控制或租户隔离证明。
+  - [原始来源](https://github.com/langchain-ai/langgraph/pull/9401)
+- LangChain Core的独立同类问题未被本PR解决。
+  - 证据：#9417明确不修改langchain-core.runnables.config.merge_configs；核查时langchain-ai/langchain issue #39994仍open，示例为显式recursion_limit=25被丢弃。不能用LangGraph升级推断整条包装链已修复。
+  - [原始来源](https://github.com/langchain-ai/langchain/issues/39994)
+
+## 限制与未知
+
+- 本轮只读研究，未安装依赖、运行代码、调用模型或复现实验。所有建议用例均为待执行验收计划。
+- 没有量化RAG召回率、回答质量、性能或降本收益；不能把停止边界修复写成检索算法提升。
+- recursion_limit约束图supersteps而非token、金额、墙钟时间或单个节点内部调用数。
+- LangChain Core同类合并逻辑仍是独立问题，混用Runnable包装层必须另测。
+- 官方回归主要验证配置值及模拟流事件，不能代替真实部署父子图、RemoteGraph和循环停止集成测试。
+- 远程命名空间修复是事件归属修正，不是权限控制、租户隔离或远端内容质量保证。
+- 自动化采集的循环限制不替代站点条款、robots、授权、速率限制与敏感数据规则。
+
+## 工程建议（未复现实验）
+
+- 适用已使用LangGraph的多轮检索或工具代理；若未使用该框架，不应为了新闻引入依赖。
+- 升级前固定旧/新版本和依赖，使用隔离的无外部调用图，对比环境默认值等于/不等于显式值两组。
+- 同时验收两个不变量：显式上限必须覆盖，自动填充默认值不得放宽已绑定上限。
+- 保留字典、关键字、关键字覆盖字典、后续添加tags以及deepcopy/pickle六类回归情形。
+- 配置断言与实际停止测试分开；实际循环使用小上限，不在生产付费模型上复现9999步。
+- 沿父子图、RemoteGraph和LangChain Runnable包装边界记录最终生效的上限及停止位置。
+- 同版RemoteGraph修复作为补充说明即可，不把10/23合并误记为10/24新合并或拆成第二条凑数。
+- 窗口内RAGFlow #21431公开model-group handler仍返回NotImplemented，不作为可用功能；MarkItDown与Crawl4AI无合格窗口新增。
+
+## 实际阅读范围
+
+已打开官方release、#9417与#9401 PR正文及逐文件差异、1.2.17固定tag的完整_config.py、#9416复现报告、#39994状态、合并与发布提交check-runs及发布任务状态；已对照10/09–10/24日报去重。另用官方API的精确since窗口查RAGFlow/MarkItDown/Crawl4AI主分支与release，Crawl4AI附查develop；普通网页旧缓存未用于无更新判断。未安装依赖、运行模型或复现实验。
+
+## 原始来源
+
+- [LangGraph 1.2.17 正式版发布说明](https://github.com/langchain-ai/langgraph/releases/tag/1.2.17)
+- [PR #9417：显式递归上限不应被默认值吞掉](https://github.com/langchain-ai/langgraph/pull/9417)
+- [1.2.17 固定版本配置合并源码](https://github.com/langchain-ai/langgraph/blob/1.2.17/libs/langgraph/langgraph/_internal/_config.py)
+- [Issue #9416：环境默认值触发的复现与实际部署报告](https://github.com/langchain-ai/langgraph/issues/9416)
+- [配置回归测试：显式默认值、deepcopy 与 pickle](https://github.com/langchain-ai/langgraph/pull/9417/files)
+- [正式发布提交 CI 与 Python 3.10–3.14 测试](https://github.com/langchain-ai/langgraph/actions/runs/40047946864)
+- [1.2.17 发布流水线：publish 已成功](https://github.com/langchain-ai/langgraph/actions/runs/40048046324)
+- [LangChain Core 独立同类问题仍未关闭](https://github.com/langchain-ai/langchain/issues/39994)
+- [PR #9401：RemoteGraph 流式子图命名空间修复](https://github.com/langchain-ai/langgraph/pull/9401)
