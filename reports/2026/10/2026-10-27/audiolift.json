@@ -1,0 +1,112 @@
+{
+  "id": "audiolift",
+  "title": "AudioLift：单图与语音生成全头部 Gaussian 动画",
+  "problem": "单张肖像缺少侧后方观测，语音又必须驱动嘴部与表情。方法试图绕开参数化脸模对极端表情与饰物的限制，但生成补全与真实几何恢复必须区分。",
+  "inputs": "推理输入是一张肖像与语音，不需要目标人物的多相机实拍。训练仍依赖多视角捕捉：NeRSemble；单图推理不等于单图训练。",
+  "outputs": "模型内部逐帧产生 Gaussian 头部；发布入口实际交付正面、覆盖视角、360°绕拍三个带音频视频及运行记录。所读入口没有导出可复用 SMPL-X 驱动接口或拓扑网格；不能把自由视角渲染等同于骨骼绑定角色资产。",
+  "pipeline": [
+    {
+      "title": "1｜输入适配（推理）",
+      "explanation": "先检查肖像比例与背景；不合格输入经过抠图和脸部取景，失败可退回整图适配。保存实际使用的图像和预处理记录，避免把输入裁剪错误误判为三维重建失败。--strict-reference 可在生成前停下供人工检查。依据官方 README 与安装说明。"
+    },
+    {
+      "title": "2｜语音和肖像形成两路视频条件（推理）",
+      "explanation": "Stage 1 将肖像编码为干净参考 latent，语音按16kHz处理并提取 Wav2Vec2 特征。四视角2×2网格与独立正面流同时去噪；参考身份与对应时间语音约束生成。默认网格832×1216，拆成四幅416×608，正面同为416×608；输出 grid.mp4、front.mp4。依据 stage1/pipeline.py。"
+    },
+    {
+      "title": "3｜长序列仍按窗口同步生成（推理）",
+      "explanation": "默认每窗81帧、25fps、30步；长音频按重叠 latent 窗口处理。两路使用同步时间步，窗口在每次去噪步骤内推进，再混合重叠区，而不是先生成完整前段再拼后段。该实现降低单窗注意力压力，但不能据此保证无限长度、恒定总显存或无身份漂移。依据 Stage 1源码；后半为工程判断。"
+    },
+    {
+      "title": "4｜五幅图与已知相机一起提升到三维（推理）",
+      "explanation": "Stage 2 按左上、右上、左下、右下拆网格，再加入适配尺寸的正面图；读取仓库固定的 NeRSemble 标定内外参，每个时间点单独前向重建。不是现场估计用户输入相机，也不是只对原图做一次静态重建后套音频。依据 stage2/pipeline.py。"
+    },
+    {
+      "title": "5｜Gaussian参数与渲染（推理）",
+      "explanation": "解码器产生位置、颜色/球谐特征、三轴尺度、四元数旋转和不透明度；像素对齐部分的位置通过输入射线约束。每一帧的同一组 Gaussians 用于不同目标相机渲染，然后释放该帧数据。源码中没有跨帧骨骼驱动变量；逐帧参数不自动构成统一可编辑角色。依据 gslrm.py 与 Stage 2源码。"
+    },
+    {
+      "title": "6｜为何训练时需要特殊约束",
+      "explanation": "训练时，保持最正面视角不受扰动，对其他视角加入图像畸变/相机扰动，教重建器容忍生成视角不一致；空间约束压制头部范围外漂浮点；背面用教师先验提供伪目标。推理不再注入这些训练扰动。背面目标是合理外观，不是不可见真值。依据项目页及论文。"
+    }
+  ],
+  "mechanism": "核心是“语音→同步多视角视频→每帧三维重建”，而非“语音→FLAME系数→固定角色变形”。Stage 1负责运动及时间连贯，Stage 2负责多视角统一表示；两类一致性不是同一个指标。训练微调与推理前向应分开看：公开包只含推理，不能从入口可运行直接推断训练可复现。",
+  "results": [
+    {
+      "claim": "RenderMe-360 正面 FID：44.53；SDTalk：77.05。",
+      "evidence": "表1；同表 SSIM 0.678 低于 SDTalk 0.710，并非所有指标最优。 FID越低越好，SSIM越高越好。",
+      "source": "https://arxiv.org/html/2610.31747v1"
+    },
+    {
+      "claim": "RenderMe-360 新视角 PSNR：12.27；SDTalk：10.99。",
+      "evidence": "表1；仅评估锚帧0，42片段×5相机=210图像对，不是完整运动序列。 PSNR单位dB，越高越好。",
+      "source": "https://arxiv.org/html/2610.31747v1"
+    },
+    {
+      "claim": "HDTF FID：29.73；Real3D-Portrait：35.31。",
+      "evidence": "表2；各21主体，81帧，正面评分排除帧0。 FID越低越好。",
+      "source": "https://arxiv.org/html/2610.31747v1"
+    }
+  ],
+  "limitations": [
+    "背面是合理先验补全，不是不可见真实几何的测量。",
+    "主要新视角定量结果只覆盖锚帧0；不可扩展成动态360°精度保证。",
+    "未独立复现，也未测量延迟。",
+    "官方安装说明的验证仍不完整：统一流程的 Stage 1 在30步中的第7步被SIGTERM中断；Stage 2仅用已有Stage 1输入，在RTX3090完成81帧及三段视频。作者未完成A100/Colab整链运行。",
+    "约44.2GiB是作者中断前观察值，不是完整流程峰值或容量保证；本轮未实测。",
+    "所读标准入口逐帧重建后渲染，不提供编辑拓扑/骨骼复用的完成证据；若目标是游戏角色驱动，应另行验证资产格式与运动接口。"
+  ],
+  "engineering_notes": [
+    "官方仓库已提供推理，不包含训练代码；README 声明权重公开免登录，但本轮未成功读取 Hugging Face 权重页或下载核验。",
+    "默认环境：Linux、Python 3.10、FFmpeg、至少48GB显存；两阶段使用独立环境顺序运行。",
+    "仓库提供统一入口和分阶段重试；先检查保存的 reference_used.png 与预处理记录，再判断失败是否来自输入适配。",
+    "建议先用获授权肖像做短片试验，检查侧后方与表情连续性；此为验证建议，不是测试结果。",
+    "工程判断｜先分开验收“发布包能跑完”和“生成质量够用”。以短音频检查环境、模型哈希与实际输入，再固定seed比较正面/侧面/背面；不要先扩到长音频。",
+    "工程判断｜Stage 1失败优先检查输入适配、依赖和显存；Stage 2失败可复用已有grid/front视频，避免重复昂贵生成。保留run.json用于排查相机、权重和输出。",
+    "工程判断｜若需要实时交互，必须另测首帧延迟和整段耗时；25fps是输出视频帧率，不是模型实时生成速度。",
+    "工程判断｜若需要GS-to-Mesh或SMPL-X重定向，本发布不能直接视为解决方案；需单独设计网格化、跨帧对应与绑定验证。"
+  ],
+  "sources": [
+    {
+      "title": "安装及作者验证状态",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/docs/installation.md"
+    },
+    {
+      "title": "AudioLift 论文与提交时间",
+      "url": "https://arxiv.org/abs/2610.31747"
+    },
+    {
+      "title": "AudioLift 全文（含附录）",
+      "url": "https://arxiv.org/html/2610.31747v1"
+    },
+    {
+      "title": "AudioLift 官方项目页",
+      "url": "https://zhuoyuanjiang.github.io/audiolift-page/"
+    },
+    {
+      "title": "AudioLift 官方推理仓库",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift"
+    },
+    {
+      "title": "公开权重说明提交（10月22日）",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift/commit/39144f6a4c4eb171044d9a4b2df72be53644c3cd"
+    },
+    {
+      "title": "arXiv cs.CV 10月26日公告批次",
+      "url": "https://arxiv.org/list/cs.CV/recent?skip=0&show=2000"
+    },
+    {
+      "title": "Stage 1双流采样实现",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage1/pipeline.py"
+    },
+    {
+      "title": "Stage 2逐帧重建与渲染实现",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage2/pipeline.py"
+    },
+    {
+      "title": "Gaussian参数解码实现",
+      "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage2/models/gslrm.py"
+    }
+  ],
+  "read_scope": "已阅读论文正文、方法、表1–3、附录A–F的评估与实现内容，以及官方项目页和仓库 README；未观看全部演示视频、运行代码或验证权重。提交时间为2026-10-22 17:59:54 UTC，进入10月26日cs.CV公告；仓库最新提交10月22日21:29:45 UTC。本条是新公告发现，不是10月26日代码发布。 另已读官方安装说明、Stage 1/2推理流水线及Gaussian解码相关源码；安装文档发现端到端发布验证未完成，已列为重点限制。"
+}
