@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-27",
+  "title": "AI 工程研究日报",
+  "edition_label": "语音三维头部 / RAG 流式边界 / 后台生命周期",
+  "summary": "本期细读 AudioLift 的视频先验到三维头部提升，并核对 RAGFlow 流式执行与 Claude Code 2.1.311 后台等待、恢复及重试边界。AudioLift是10/26公告批次新发现，代码早已发布；RAGFlow为主分支变更，Claude Code为10/26正式版。生成背面不等于测量真值，修复声明不等于独立实测。",
+  "notice": "对照10/26，并回看10/9至10/26各期条目去重。日期区分提交、公告和代码发布。未运行训练、模型推理或付费API。公开研究草稿，不含私人项目数据；覆盖有限，不代表全网无新增。上期Claude更新页可见性遗漏在本期覆盖记录中说明，旧报告不覆盖。",
+  "verified_at": "2026-10-27T00:08:00Z",
+  "items": [
+    {
+      "id": "audiolift",
+      "category": "数字人 / 几何",
+      "title": "AudioLift：单图与语音生成全头部 Gaussian 动画",
+      "finding": "以联合多视角视频为中间表示，再重建逐帧 Gaussian；已有官方推理入口。",
+      "relevance": "可作为单肖像语音驱动、带饰物头部生成的候选路线。",
+      "action": "先复核发布包可运行性：官方整链验证尚未完成，再用获授权短片检查输入适配和视角一致性。",
+      "caveat": "主要新视角指标只评估锚帧0；背面为先验补全。作者公开包整链验证尚未完成，本轮也未复现。",
+      "recency_label": "10月26日公告新发现；非当日提交/代码发布",
+      "source_date": "论文提交2026-10-22 17:59:54 UTC；arXiv公告2026-10-26；仓库最新提交2026-10-22 21:29:45 UTC",
+      "sources": [
+        {
+          "title": "安装及作者验证状态",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/docs/installation.md"
+        },
+        {
+          "title": "AudioLift 论文与提交时间",
+          "url": "https://arxiv.org/abs/2610.31747"
+        },
+        {
+          "title": "AudioLift 全文（含附录）",
+          "url": "https://arxiv.org/html/2610.31747v1"
+        },
+        {
+          "title": "AudioLift 官方项目页",
+          "url": "https://zhuoyuanjiang.github.io/audiolift-page/"
+        },
+        {
+          "title": "AudioLift 官方推理仓库",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift"
+        },
+        {
+          "title": "公开权重说明提交（10月22日）",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift/commit/39144f6a4c4eb171044d9a4b2df72be53644c3cd"
+        },
+        {
+          "title": "arXiv cs.CV 10月26日公告批次",
+          "url": "https://arxiv.org/list/cs.CV/recent?skip=0&show=2000"
+        },
+        {
+          "title": "Stage 1双流采样实现",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage1/pipeline.py"
+        },
+        {
+          "title": "Stage 2逐帧重建与渲染实现",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage2/pipeline.py"
+        },
+        {
+          "title": "Gaussian参数解码实现",
+          "url": "https://github.com/ZhuoyuanJiang/AudioLift/blob/main/stage2/models/gslrm.py"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-27/audiolift.md"
+    },
+    {
+      "id": "ragflow-canvas-streaming",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow Go 画布接通真正的增量流式输出",
+      "finding": "LLM/Generate→终止 Message 可直接转发模型增量，不再等完整文本；已输出后停止自动重试，降低重复片段风险。",
+      "relevance": "影响 RAG 答复的交互等待与流式故障语义，比单纯换模型更接近应用链路问题。",
+      "action": "先在隔离环境验证增量时间、完整结果和中断处理；不要把 main 提交当作正式版本已交付。",
+      "caveat": "仅单一消费 Message、非结构化输出；底层不支持 Stream 仍回退完整响应。无独立性能或 CI 复验。",
+      "recency_label": "10 月 26 日 main 合并｜未确认正式包交付",
+      "source_date": "2026-10-26 08:54:51 UTC（合并）；v0.27.3 仍为 2026-10-23",
+      "sources": [
+        {
+          "title": "RAGFlow #21468 完整差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/1133b9fd39f43465eae1e68b24f9bbfb141154c1"
+        },
+        {
+          "title": "#21468 合并记录",
+          "url": "https://github.com/infiniflow/ragflow/pull/21468"
+        },
+        {
+          "title": "RAGFlow releases",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-27/ragflow-canvas-streaming.md"
+    },
+    {
+      "id": "claude-code-21311-background-lifecycle",
+      "category": "智能体 / 应用",
+      "title": "Claude Code 2.1.311：长任务不能只看对话是否结束",
+      "finding": "10/26 正式版修复后台等待引发额外主回合、重复结束钩子、子任务工作目录过早清理和禁止重试信号失效等问题，并新增 runner 保活参数。",
+      "relevance": "长时研究和工具代理需要区分模型回合、真实后台进程与业务完成；这些边界影响重复执行和恢复可靠性。",
+      "action": "在隔离任务对比后台等待、MCP 晚连接、钩子次数及恢复幂等；以状态、日志和产物验证，不只看聊天结果。",
+      "caveat": "官方修复声明，未独立复现；新 runner 参数参考尚未同步，不提供未验证配置。企业自托管与本机后台会话不是同一功能。",
+      "recency_label": "10/26 正式发布｜后台生命周期修复",
+      "source_date": "2026-10-26 21:51 UTC",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.311 正式发布",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.311"
+        },
+        {
+          "title": "CLI reference：状态、日志与恢复入口",
+          "url": "https://code.claude.com/docs/en/cli-reference"
+        },
+        {
+          "title": "Agent view：后台会话状态与进程生命周期",
+          "url": "https://code.claude.com/docs/en/agent-view"
+        },
+        {
+          "title": "Self-hosted environments：适用范围",
+          "url": "https://code.claude.com/docs/en/self-hosted-environments"
+        },
+        {
+          "title": "Self-hosted runner reference：参数与生命周期边界",
+          "url": "https://code.claude.com/docs/en/self-hosted-environments-reference"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-27/claude-code-21311-background-lifecycle.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "arXiv cs.CV / cs.GR 已更新到10月26日公告批次，收录 AudioLift 为新公告发现，明确其10月22日提交及既有代码。RealMe 官方仓库本轮仍标注代码内部审核。另核查 World to World Mapping：属于代理引导的 Blender 节点重建，不是一键 GS-to-Mesh；最新提交10月24日，故不将10月26日媒体报道算作当日发布。未穷尽所有几何项目。",
+      "source_date": "arXiv公告2026-10-26；World to World Mapping最新提交2026-10-24 21:30:33 UTC",
+      "sources": [
+        {
+          "title": "arXiv cs.CV recent",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        },
+        {
+          "title": "arXiv cs.GR recent",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        },
+        {
+          "title": "RealMe官方仓库",
+          "url": "https://github.com/zju3dv/RealMe"
+        },
+        {
+          "title": "World to World Mapping提交",
+          "url": "https://github.com/gokayfem/gaussian-splat-to-blender-nodes/commit/749f0ddc2fe08920962dcb9003026a0822b35e99"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "主分支精确窗口返回 42 个提交；选取并全文核查 #21468 的真实流式链路，单独收录。#21472 完整差异仅为前端开放 Decision 类型及 provider 筛选，不能推断所有模型支持后端 System One 协议。#21485 生产差异修复全零向量路径 sim/tsim 共享底层切片，并为 rank-feature 分数/条目长度不一致增加日志与重叠前缀处理；未据此声称检索质量提升。其余提交仅筛选标题，未全部审计。正式非 RC 版本仍 v0.27.3。",
+      "source_date": "窗口 2026-10-26 00:02:48 UTC 起；#21468 合并 08:54:51 UTC；#21472 提交 07:10:14 UTC；#21485 提交 12:14:30 UTC",
+      "sources": [
+        {
+          "title": "RAGFlow #21468 完整差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/1133b9fd39f43465eae1e68b24f9bbfb141154c1"
+        },
+        {
+          "title": "#21468 合并记录",
+          "url": "https://github.com/infiniflow/ragflow/pull/21468"
+        },
+        {
+          "title": "RAGFlow releases",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        },
+        {
+          "title": "Decision 前端完整差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/f5b94a95998a0044f770abeb4abfc7fc1f349e02"
+        },
+        {
+          "title": "reranker 修正",
+          "url": "https://github.com/infiniflow/ragflow/commit/82bd3b2a581ebe1a42e9448f628f34047f227a45"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "官方GitHub API按上期核查时点查询默认分支：MarkItDown无新提交；Crawl4AI有两项文档链接修复，文件列表仅涉及docs，未发现采集运行时变化。正式版本仍分别为v0.1.9与v0.9.5。范围限默认分支和发布页，不包括全部PR；未运行工具。",
+      "source_date": "窗口起点2026-10-26 00:02:48 UTC；Crawl4AI文档提交10月26日08:24:46 / 08:41:46 UTC；正式版本日期10月21日 / 10月14日",
+      "sources": [
+        {
+          "title": "MarkItDown发布",
+          "url": "https://github.com/microsoft/markitdown/releases/tag/v0.1.9"
+        },
+        {
+          "title": "Crawl4AI发布",
+          "url": "https://github.com/unclecode/crawl4ai/releases/tag/v0.9.5"
+        },
+        {
+          "title": "Crawl4AI文档修复一",
+          "url": "https://github.com/unclecode/crawl4ai/commit/5fae7a4092b977ee357410bf015423bfdeee2bbc"
+        },
+        {
+          "title": "Crawl4AI文档修复二",
+          "url": "https://github.com/unclecode/crawl4ai/commit/888299fb5f0b82181897dc0e61bfb4b036f0aea5"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "另核到 LangGraph 1.2.18 于10/26正式发布，发布说明列出错误恢复、终止检查点流与 DeltaChannel 快照频率变化。本轮仅核发布说明，未深读全部实现与测试，不列为完整详解卡片。OpenAI Agents Python/JS发布页未见本窗口新版本；结论不延伸到所有未发布主分支。",
+      "source_date": "LangGraph 1.2.18：2026-10-26 20:04:45 UTC；OpenAI Python v0.24.0：10/15；JS扩展0.21.0：10/20",
+      "sources": [
+        {
+          "title": "LangGraph 1.2.18 发布",
+          "url": "https://github.com/langchain-ai/langgraph/releases/tag/1.2.18"
+        },
+        {
+          "title": "OpenAI Agents Python releases",
+          "url": "https://github.com/openai/openai-agents-python/releases"
+        },
+        {
+          "title": "OpenAI Agents JS releases",
+          "url": "https://github.com/openai/openai-agents-js/releases"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "本窗口未独立收录新机制卡片。OpenAI 10/26 发布 GPT-6.1 Terra，官方定位包含视觉推理与电脑操作；本轮只核对发布与模型页，没有完成同任务评测，不把新模型宣传当作新工作流。Claude Tag API 10/23 企业 beta 本次首次核到，纠正上期“最新可见为10/22”的来源可见性限制；它管理 Slack 频道配置与 Access bundles，不面向 Claude Console 组织，不冒充10/26新发布。",
+      "source_date": "OpenAI：2026-10-26；Claude Tag API：2026-10-23；核查2026-10-27",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "GPT-6.1 Terra 模型页",
+          "url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Claude Tag API 文档",
+          "url": "https://platform.claude.com/docs/en/manage-claude/claude-tag-api"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "收录 Claude Code 2.1.311 的后台生命周期边界。完整版本说明已读，但选取的是长任务等待与恢复，不是所有界面修复；未实机复现。既有状态查询命令仅作为验证方法，不称本次新增。",
+      "source_date": "2026-10-26 21:51 UTC",
+      "sources": [
+        {
+          "title": "Claude Code 2.1.311",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.311"
+        }
+      ]
+    }
+  ]
+}
