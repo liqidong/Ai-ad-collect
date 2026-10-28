@@ -1,0 +1,225 @@
+{
+  "date": "2026-10-28",
+  "title": "AI 工程研究日报",
+  "edition_label": "生成视频补三维训练 / 连接器出站边界 / 持久研究分支",
+  "summary": "本期重点核对生成视频作为高斯数字人训练补充的收益与反证，并研读连接器出站安全边界和大模型开发工具的新增使用机制。生成数据不是测量真值；正式发布、主分支实现与论文研究分别标注。",
+  "notice": "对照10月27日报告，并回看10月9日至27日公开归档去重。仅公开研究草稿，不含私人资料。已核查的原论文、文档和代码不等于已复现实验；本轮未训练模型、运行推理或调用付费API。覆盖有限，无新增仅指本轮检索未发现符合收录条件的变化。",
+  "verified_at": "2026-10-28T00:07:08Z",
+  "items": [
+    {
+      "id": "single-camera-generated-supervision",
+      "category": "数字人 / 几何",
+      "title": "生成视频怎样反补高斯人训练：先隔离伪数据误差，再补未见区域",
+      "finding": "新公开论文将生成视频用于双层Mesh–2DGS数字人补监督，但表VI显示直接加入伪帧可降低重建指标；重要变化是分离伪数据的几何/外观误差，不是“生成越多越好”。",
+      "relevance": "为生成视频反补全身数字人训练提供可检验机制；与脸部表情迁移相关的只是误差隔离思想，尚无直接验证。",
+      "action": "先做仅可靠数据/直接混合/重追踪与独立误差分支三组同预算对照，分别统计已见区域退化与未见区域改善；不要直接替换整条数字人管线。",
+      "caveat": "本文完整官方实现未核验到；生成幻觉、跨层穿插与未知区域真值缺失仍在。无精细表情控制实证，本次未复现。",
+      "recency_label": "10月27日新公开列表收录；10月25日提交",
+      "source_date": "2026-10-25（arXiv v1提交）；2026-10-27（cs.GR公开列表）",
+      "sources": [
+        {
+          "title": "论文 v1：Single Camera based Simulation and Try-on Ready Avatar Modeling（完整16页）",
+          "url": "https://arxiv.org/pdf/2610.34223"
+        },
+        {
+          "title": "arXiv版本记录（2026-10-25提交）",
+          "url": "https://arxiv.org/abs/2610.34223"
+        },
+        {
+          "title": "arXiv cs.GR最近公开列表（2026-10-27公告）",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        },
+        {
+          "title": "作者前作 D3-Human代码（不是本文完整实现）",
+          "url": "https://github.com/USTC3DV/D3Human-code"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-28/single-camera-generated-supervision.md"
+    },
+    {
+      "id": "ragflow-connector-origin-guard",
+      "category": "采集 / 工具",
+      "title": "RAGFlow 连接器：下载、重定向与代理不能绕过来源边界",
+      "finding": "Notion附件下载接入逐跳URL校验与DNS固定；REST跨origin删除自定义鉴权头；代理路径保留校验IP为目的地址。",
+      "relevance": "为自动采集与RAG数据入口补齐跳转、凭据和代理边界，不代表检索指标提升。",
+      "action": "固定提交在隔离环境复核作者新增测试，分别检查未授权目标零请求、跨origin鉴权剥离以及Host/SNI；先核实部署包版本。",
+      "caveat": "10月27日main合并，稳定版仍v0.27.3；测试已读未执行。普通自定义header、URL凭据和所有代理场景未证明均被覆盖。",
+      "recency_label": "10月27日代码合并｜非稳定版发布",
+      "source_date": "2026-10-27 11:13:00 UTC（#21545合并）；稳定版v0.27.3为10月23日",
+      "sources": [
+        {
+          "title": "RAGFlow #21545 完整提交差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/256edaf959b9369feb7b09c593848ecad094aac7"
+        },
+        {
+          "title": "合并记录",
+          "url": "https://github.com/infiniflow/ragflow/pull/21545"
+        },
+        {
+          "title": "共享请求与重定向实现",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/ssrf.go"
+        },
+        {
+          "title": "Notion 下载实现与尺寸限制",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/notion.go#L545"
+        },
+        {
+          "title": "REST 鉴权与逐跳处理",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/rest_api.go#L600"
+        },
+        {
+          "title": "代理固定目标的回归测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/ssrf_test.go"
+        },
+        {
+          "title": "Notion 拒绝私网下载测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/notion_test.go"
+        },
+        {
+          "title": "REST 自定义鉴权头回归测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/rest_api_test.go"
+        },
+        {
+          "title": "RAGFlow 正式与预发布版本",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-28/ragflow-connector-origin-guard.md"
+    },
+    {
+      "id": "codex-0165-attached-thread-forks",
+      "category": "大模型前沿用法",
+      "title": "Codex 0.165.0 附着线程分叉：给研究主线建立可持久回看的分支，而非另一个自动子代理",
+      "finding": "0.165.0 新增实验性 attachToSource：持久分叉附着来源、普通列表隐藏、显式 attachedToThreadId 发现，来源删除前须先处理附着线程。相对已有普通 fork，变化是关系和生命周期，不是首次支持多智能体。",
+      "relevance": "可为算法研究的候选方案建立可回看的分支组织，减少主列表杂乱；并不自动执行实验、合并结果或隔离文件写入。",
+      "action": "固定 0.165.0，在一次性本地环境启用 experimentalApi，使用无隐私测试来源验证 fork 响应、普通/专用列表差异、重启恢复及删除保护。",
+      "caveat": "接口仍实验性，需本地 store+SQLite；禁止与 ephemeral/deferGoalContinuation 同用。已读源码与测试但未运行，没有速度、成本或质量收益结论。",
+      "recency_label": "新发布可试用；接口仍实验性（PR 10月23日合并，版本10月27日发布）",
+      "source_date": "2026-10-27T20:09:38Z（上海 2026-10-28 04:09:38）；PR 2026-10-23",
+      "sources": [
+        {
+          "title": "Codex CLI 0.165.0 官方发布说明",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.165.0"
+        },
+        {
+          "title": "PR #56351：experimental attached thread forks",
+          "url": "https://github.com/openai/codex/pull/56351"
+        },
+        {
+          "title": "0.165.0 线程协议定义",
+          "url": "https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server-protocol/src/protocol/v2/thread.rs"
+        },
+        {
+          "title": "0.165.0 请求处理实现",
+          "url": "https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server/src/request_processors/thread_processor.rs"
+        },
+        {
+          "title": "0.165.0 附着线程测试源码",
+          "url": "https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server/tests/suite/v2/attached_thread_tests.rs"
+        },
+        {
+          "title": "0.165.0 本地线程删除保护",
+          "url": "https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/thread-store/src/local/delete_thread.rs"
+        },
+        {
+          "title": "官方 App Server：握手与实验接口",
+          "url": "https://learn.chatgpt.com/docs/app-server"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-28/codex-0165-attached-thread-forks.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "收录10月27日公告的Single Camera based Simulation and Try-on Ready Avatar Modeling，关注生成视频补训练的误差隔离与负面消融，不当作完整可运行开源项目。另发现VidEdit3D为静态场景环视视频编辑再拟合高斯，不直接证明面部表情驱动；本期未完成同等深读，暂不列卡片。昨日AudioLift及既有RealMe不重复。",
+      "source_date": "核查2026-10-28；论文提交2026-10-25，公告列表2026-10-27",
+      "sources": [
+        {
+          "title": "本期全文",
+          "url": "https://arxiv.org/pdf/2610.34223"
+        },
+        {
+          "title": "arXiv cs.GR recent",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        },
+        {
+          "title": "VidEdit3D原始记录",
+          "url": "https://arxiv.org/abs/2610.35756"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本次重点全文核对RAGFlow #21545连接器请求安全差异，归入采集 / 工具；不重复昨日Canvas流式执行。其余当日提交未逐项审计，不能据此声称RAG全领域无新增。稳定版仍v0.27.3；RC与滚动nightly不当作新稳定版。",
+      "source_date": "核查2026-10-28；#21545合并2026-10-27 11:13 UTC",
+      "sources": [
+        {
+          "title": "RAGFlow #21545 完整提交差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/256edaf959b9369feb7b09c593848ecad094aac7"
+        },
+        {
+          "title": "合并记录",
+          "url": "https://github.com/infiniflow/ragflow/pull/21545"
+        },
+        {
+          "title": "RAGFlow 正式与预发布版本",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "新增 Codex0.165.0 附着线程分叉技术详解；OpenAI API changelog最新仍10月26日Terra，Claude平台最新10月23日，未补入旧机制。",
+      "source_date": "Codex0.165.0: 2026-10-27T20:09:38Z；API changelog: 2026-10-26 / 2026-10-23",
+      "sources": [
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "ChatGPT & Codex changelog",
+          "url": "https://learn.chatgpt.com/docs/changelog"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "已核查Claude Code2.1.312的hook并发24+12边界变化，源说明未交代超限调度处理；本期保留核查，不单列卡片或重复昨日生命周期详解。",
+      "source_date": "2026-10-27T20:24:20Z",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.312",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.312"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "MarkItDown与Crawl4AI无新增重点条目；RAGFlow连接器安全另有详解。相对上期核查时点，MarkItDown与Crawl4AI默认main分支均无新提交，最新正式版仍分别为v0.1.9与v0.9.5。核查范围为官方发布页和GitHub API默认分支窗口，不涵盖全部未合并PR，也不代表整个采集领域没有变化。",
+      "source_date": "窗口2026-10-27T00:08:00Z至本期核查；版本分别发布2026-10-21与2026-10-14",
+      "sources": [
+        {
+          "title": "MarkItDown v0.1.9",
+          "url": "https://github.com/microsoft/markitdown/releases/tag/v0.1.9"
+        },
+        {
+          "title": "Crawl4AI v0.9.5",
+          "url": "https://github.com/unclecode/crawl4ai/releases/tag/v0.9.5"
+        },
+        {
+          "title": "MarkItDown main提交",
+          "url": "https://github.com/microsoft/markitdown/commits/main/"
+        },
+        {
+          "title": "Crawl4AI main提交",
+          "url": "https://github.com/unclecode/crawl4ai/commits/main/"
+        }
+      ]
+    }
+  ]
+}
