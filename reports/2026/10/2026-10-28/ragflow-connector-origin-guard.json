@@ -1,0 +1,106 @@
+{
+  "id": "ragflow-connector-origin-guard",
+  "title": "RAGFlow 连接器：下载、重定向与代理不能绕过来源边界",
+  "problem": "知识库的外部同步并不止一次HTTP请求：Notion附件可能转向存储域名，REST接口可能重定向，企业出口也可能经过代理。如果初始URL通过检查后，后续跳转或代理重新解析到另一个地址，原检查就不再约束真实连接；自定义名称的API密钥头也可能在跨域时被保留。10月27日合并的#21545不是新检索模型，而是补齐这些数据入口边界；相较10月27日报关注的画布增量输出，本期关注入库前网络安全。",
+  "inputs": "无模型训练。运行时输入是Notion附件URL或REST同步配置（URL、方法、查询参数、请求体、鉴权类型和鉴权头），以及请求上下文、超时、可选HTTP客户端/代理配置。REST将配置生成的authHeaders名称显式交给共享请求层；普通业务header并不会自动被识别为凭据。",
+  "outputs": "成功时输出下载到的附件字节或解析后的REST响应，继续原同步流程；失败时输出URL安全拒绝、重定向/HTTP错误或尺寸超限错误。这里没有新的视频、向量或模型产物，也没有证明检索准确率提高。",
+  "pipeline": [
+    {
+      "title": "1. 把入口接到共享请求路径",
+      "explanation": "Notion file()以前直接构造GET并调用httpClient.Do；现在把URL、GET、客户端和超时交给connectorRequest。默认超时仍60秒，可沿用客户端已有正值超时；不是本次新提速。REST整理普通header与authHeaders，同时列出额外敏感头名。输出是统一的逐跳请求选项。"
+    },
+    {
+      "title": "2. 验证每一跳并固定连接目标",
+      "explanation": "输入当前跳URL，经Validate（默认assertConnectorURLSafe）得到主机名及一个已校验IP；拒绝即终止，未发出该跳请求。请求目标改为已校验IP和原端口，而HTTP Host保留原域名，TLS使用原主机名作为默认SNI。因而校验之后的再次DNS变化不应改变目标。此共享机制此前已存在，本次让Notion附件接入，并改造代理兼容路径。"
+    },
+    {
+      "title": "3. 兼容代理但不交还目标解析权",
+      "explanation": "在替换目标前，先依据原请求及客户端/环境选择代理。直连仍拨号到校验IP；走代理时连接代理，但HTTP absolute URI或HTTPS CONNECT的目的地址为校验IP。HTTP Host和TLS SNI保留原来源含义。这是本次新增的传输差异；代理本身仍属于需要信任和配置管理的出口，不能据此宣称所有代理都安全。"
+    },
+    {
+      "title": "4. 按origin处理跳转和凭据",
+      "explanation": "收到重定向后关闭当前响应与闲置连接，解析Location；origin现在由协议、规范化主机及显式/默认端口组成，而非只比较Host字符串。跨origin时，删除内置敏感头及REST配置的额外鉴权头，并清空REST Basic Auth。跨origin的307/308若携带非空body则拒绝；301/302/303转为GET并清空body。随后新URL回到第2步，默认最多跟随10次跳转。带body的阻断规则并非本次才出现，变化是origin判定和自定义header覆盖。"
+    },
+    {
+      "title": "5. 检查成功响应并交付同步",
+      "explanation": "非重定向响应返回业务层，关闭body时释放该跳transport。Notion仍要求2xx，并同时按Content-Length与实际读取长度限制附件大小（默认100 MiB）；REST沿用状态码、限流和解析处理。输出数据或明确失败，不把失败页面当知识库成功入库。"
+    }
+  ],
+  "mechanism": "关键不是只增加一个URL黑名单，而是保持“校验地址—真正连接—每次跳转—凭据归属”一致。此次三项具体增量：Notion附件使用已有共享校验路径；REST自定义鉴权头纳入跨origin清除，协议变化也算origin变化；共享transport支持代理时仍把已验证IP作为目标。保留域名Host/SNI是为了在固定IP的同时维持虚拟主机路由与TLS语义。以上为固定提交的代码行为分析，不是独立安全审计或部署保证。",
+  "results": [
+    {
+      "claim": "Notion拒绝私网入口和私网重定向的行为有专门测试",
+      "evidence": "新增2个测试：直接私网URL预期报错且本地服务没有收到请求；重定向至私网元数据地址预期报错。原尺寸上限测试保留并启用测试专用loopback钩子。这里只读到了测试定义，未执行测试，也没有漏洞利用或线上验证。",
+      "source": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/notion_test.go"
+    },
+    {
+      "claim": "自定义鉴权头跨origin不能继续传递",
+      "evidence": "新增REST回归测试配置api_key_header和X-Tenant-Credential，先进入一个本地测试服务再跳转到另一端口，断言最终服务读到的该头为空。这验证的是测试设计中的不同origin，不能直接推断所有用户手填header都被删除。",
+      "source": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/rest_api_test.go"
+    },
+    {
+      "claim": "代理路径有HTTP目标及HTTPS CONNECT回归断言",
+      "evidence": "新增2个测试：HTTP代理观察到校验IP:端口，发送的Host仍原域名且响应记录恢复原URL；HTTPS代理观察到CONNECT目标为校验IP:端口，目标端Host和SNI仍是原域名。测试使用受控本地服务；HTTPS测试关闭证书验证只为测试证书，不能作为生产配置建议。",
+      "source": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/ssrf_test.go"
+    },
+    {
+      "claim": "已合并代码，不等于稳定版本已发布",
+      "evidence": "#21545于2026-10-27 11:13:00 UTC合并；查询正式发布页，非RC稳定版仍v0.27.3（10月23日）。滚动nightly说明指向10月27日13:24的main提交5966db，但未核验所有打包产物和部署镜像是否一致包含此修复。无论文数据集、指标表或性能数字。",
+      "source": "https://github.com/infiniflow/ragflow/pull/21545"
+    }
+  ],
+  "limitations": [
+    "阅读范围为本次7个文件完整diff、ssrf.go全文件，以及Notion file()和REST fetchPageOnce()上下文；没有审计所有连接器、底层common URL校验实现、构建产物或完整依赖。",
+    "共享校验和逐跳DNS固定不是10月27日首次发明，不应包装为全新SSRF方案；新增接入与origin/代理行为需要按版本区分。",
+    "额外敏感头来自REST authHeaders；若把凭据随意放入普通自定义header或查询字符串，本次差异不足以证明它们均有同样保护。建议避免URL内凭据。",
+    "未运行Go测试、CI、真实Notion同步或企业代理；未给出安全评级、漏洞编号、攻击成功率或性能结论。",
+    "代理配置是受信任的运维边界；本次未证明恶意代理、所有TLS自定义设置或所有网络拓扑安全。",
+    "网络安全处理不等于已获得采集许可；数据授权、服务条款、个人信息与保留策略仍需单独检查。"
+  ],
+  "engineering_notes": [
+    "建议先固定此commit在隔离环境复核，不直接将生产镜像升级到不明nightly；先查镜像对应提交与回滚方案。",
+    "最小回归建议：在仓库的Go构建环境，执行 go test ./internal/syncer/connector -run \"Test(NotionConnectorFileRejectsPrivate|RestAPIFetchPageRedirectStripsCustomAuthHeader|ConnectorRequestUses)\" -count=1；这是拟议验证步骤，本轮未运行。",
+    "只使用测试凭据与受控测试服务，记录每一跳目标、origin、是否发出请求及最终头是否为空，不记录密钥值。验证同origin保持必要鉴权、不同origin剥离鉴权，不能只测成功下载。",
+    "如需企业代理，分别验证HTTP目标固定、HTTPS CONNECT固定、Host/SNI与证书校验，维持生产TLS验证；不要将测试中的InsecureSkipVerify照搬。",
+    "对算法工程的价值是让自动采集与RAG同步的数据入口可解释、可回归；预期减少误连及凭据外送风险，不是提高召回率或答案质量的实验证据。"
+  ],
+  "sources": [
+    {
+      "title": "RAGFlow #21545 完整提交差异",
+      "url": "https://github.com/infiniflow/ragflow/commit/256edaf959b9369feb7b09c593848ecad094aac7"
+    },
+    {
+      "title": "合并记录",
+      "url": "https://github.com/infiniflow/ragflow/pull/21545"
+    },
+    {
+      "title": "共享请求与重定向实现",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/ssrf.go"
+    },
+    {
+      "title": "Notion 下载实现与尺寸限制",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/notion.go#L545"
+    },
+    {
+      "title": "REST 鉴权与逐跳处理",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/rest_api.go#L600"
+    },
+    {
+      "title": "代理固定目标的回归测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/ssrf_test.go"
+    },
+    {
+      "title": "Notion 拒绝私网下载测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/notion_test.go"
+    },
+    {
+      "title": "REST 自定义鉴权头回归测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/256edaf959b9369feb7b09c593848ecad094aac7/internal/syncer/connector/rest_api_test.go"
+    },
+    {
+      "title": "RAGFlow 正式与预发布版本",
+      "url": "https://github.com/infiniflow/ragflow/releases"
+    }
+  ],
+  "read_scope": "已阅读#21545完整7文件差异（358行新增、43行删除）、固定提交ssrf.go全文、Notion附件下载与REST fetchPageOnce上下文、5个新增测试的断言，并核对PR合并时间与发布列表。未读完整仓库、未运行测试/服务；本文是代码研读，不是论文全文研读或独立复现。"
+}
