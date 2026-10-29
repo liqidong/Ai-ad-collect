@@ -1,0 +1,106 @@
+{
+  "id": "ragflow-html-media-reference",
+  "title": "RAGFlow HTML媒体引用：减少跨组件搬运图片，同时显式处理缓存失效",
+  "problem": "原来的HTML摄取将Base64图像字节夹在结构化解析项中继续传给分块、视觉增强和索引流程，图片多时会膨胀序列化结果，并受到旧文档级图像预算影响。10月28日主分支提交将HTML内嵌图片改为运行域媒体引用。这与上一期的连接器出站安全修复不同：本次处理已经进入系统的数据怎样在组件间传递、怎样避免漏图及跨任务错取，而不是新增抓取权限或改变检索算法。",
+  "inputs": "无需训练。输入是含data:image/...;base64内嵌图片的HTML文档、文档/知识库与任务标识、摄取管线配置，以及可用的Kvrocks和对象存储；选择视觉增强时还需要对应VLM。HTML解析器读取源文档，使用已有DOM属性语义解码图片；非内嵌远程图像不能据此假定已获得同样支持。",
+  "outputs": "解析阶段输出保留顺序、alt文本与表格单元格关系的结构化项，其中media_ref包含format、kind、scope、SHA256、MIME、size，而不直接携带图像Base64。分块上传完成后输出稳定的img_id；中间image和media_ref字段不得继续进入持久索引。最终仍是知识库文档/图像块，不是新模型、权重或新检索结果格式的性能保证。",
+  "pipeline": [
+    {
+      "title": "为一次摄取建立独立媒体域",
+      "explanation": "输入任务ID和Kvrocks客户端，Pipeline把媒体缓存附加到本次运行context。生产ingestor现在把KV列入必须依赖；缺少客户端时在启动校验失败，不再把它仅视为可选加速器。"
+    },
+    {
+      "title": "解析HTML，图像入缓存，结构化结果留引用",
+      "explanation": "输入HTML字节，DOM遍历保留正文、图片顺序、alt和表格位置。有效内嵌图像在解码及单图限额检查后写入缓存，输出SHA256寻址的media_ref。默认每张32 MiB，可用RAGFLOW_HTML_IMAGE_MAX_BYTES设置正数上限；超限/格式无效图片走跳过警告分支，而缓存缺失或写入失败会报错。"
+    },
+    {
+      "title": "分块阶段保留没有文字的图片",
+      "explanation": "输入文本项与media_ref，Token、Title/Group、General、One、QA等分块路径传递引用；判断空块时将media_ref算作媒体载荷，避免无alt图片因文本为空消失。纯媒体身份可由摘要产生，旧的纯媒体chunk ID可能改变。"
+    },
+    {
+      "title": "需要图像的边界才读回字节",
+      "explanation": "视觉增强或上传收到引用后，从同一运行域Kvrocks取回图像，校验scope、摘要和大小。视觉增强先复制项，并在图像内存准入限制下物化，避免把Base64重新写回共享解析结果。上传循环逐项读取后写对象存储，产生img_id并移除临时载荷；已有img_id的块跳过重复物化。"
+    },
+    {
+      "title": "持久化成功后清理，失败保留可重试边界",
+      "explanation": "输入持久化结果；索引与关联产物完成后，按独立媒体manifest清理缓存。缓存和manifest使用24小时TTL，失败运行及清理失败依赖过期兜底。缓存已失效时不能靠旧引用直接成功，重跑解析需要重新填充；本提交的Pipeline说明仍是完整图重新运行，而不是恢复任意中间检查点。"
+    }
+  ],
+  "mechanism": "关键改变是将内容载荷与组件消息分离：引用很小，图片内容暂存KV；SHA256控制内容身份，scope约束本次运行，MIME与size用于消费侧检查。不是“只要有caption就允许丢图”：有效引用发生缓存miss、损坏、跨域或传输失败时，应中止调用而非悄悄变成纯文本。必须区分这种硬错误与解析器对超限/无效data URI的跳过警告，也区分媒体物化失败与可选VLM描述失败的best-effort行为。此设计把压力从长链路Base64搬运转到KV容量、网络与生命周期管理，不能理解为整个文档始终只占一张图片内存。",
+  "results": [
+    {
+      "claim": "结构化解析结果不再随全部图片载荷等比例膨胀。",
+      "evidence": "作者TestHTMLParser_ResultIndependentOfImageBytes构造64个图片项，每个原始载荷64 KiB，要求JSON序列化结果≤256 KiB且保留64项。这是代码中的验收断言，并非本次运行得到的峰值内存或吞吐测量；没有论文实验表。",
+      "source": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/parser/parser/html_media_test.go"
+    },
+    {
+      "claim": "HTML参考路径不沿用旧256项图像数量截断。",
+      "evidence": "新增TestPutAllowsMoreThan256DistinctImages尝试写入257个不同图像载荷，HTML解析测试亦检查不存在旧文档级数量限制。它不是无限容量保证；单图上限、KV容量和运行并发仍约束实际规模。",
+      "source": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/mediacache/store_test.go"
+    },
+    {
+      "claim": "缓存失效、范围不匹配和摘要损坏成为可观察错误。",
+      "evidence": "Store.Get检查任务/引用scope与载荷大小、SHA256；上传测试CacheMissFailsEvenWithCaption明确要求即使有caption也失败。测试代码可检阅，本次未运行，不能声称已独立通过。",
+      "source": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/component/chunker/media_ref_test.go"
+    },
+    {
+      "claim": "包含真实MySQL、Kvrocks、MinIO链路的可选验证入口，但并非默认自动执行。",
+      "evidence": "TestHTMLMediaRealServices要求RAGFLOW_REAL_HTML_MEDIA_TEST=1，否则跳过；测试检查解析引用、缓存字节、对象存储图像、TTL过期、重试回填及清理。此次未连接这些服务，也没有实测检索召回率或VLM质量收益。",
+      "source": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/pipeline/html_media_real_integration_test.go"
+    }
+  ],
+  "limitations": [
+    "开放状态：代码已进入10月28日主分支固定提交；当前发布页稳定版仍列v0.27.3、另有RC和滚动nightly。未核验用户实际部署包是否包含该提交，不能把主分支功能说成已进入稳定版。",
+    "新引用生产路径重点是HTML内嵌图片。Markdown、Office、EPUB等原有内联路径不能直接宣称同步解决，PDF位置裁剪也不是此次新增。",
+    "没有训练数据集、模型对比或论文表格；没有独立运行测试、测量RSS/延迟、验证生产吞吐。64×64 KiB与256 KiB仅是作者测试输入和断言阈值。",
+    "源HTML与DOM仍可能占内存；并发VLM各自持有获准物化的图像，KV还有完整载荷和传输成本。因此不能宣传总峰值固定为单图大小。",
+    "24小时缓存不是长期存档。停顿超过TTL、异常清理或服务故障需要重新解析补缓存；自定义消费者若只读image字段将不兼容，应改读引用或img_id。",
+    "检索到的PR网页仍显示早期Open状态及“回读源文档物化”的旧设计，而固定合并提交实际实现为Kvrocks运行域缓存。本文以固定提交代码为事实依据，不将早期PR描述拼接成当前机制。"
+  ],
+  "engineering_notes": [
+    "工程建议：若知识库包含大量网页图表、实验截图或HTML导出报告，可借鉴“结构化消息只传引用、媒体在消费边界物化、成功后清理”的模式；它解决数据搬运和完整性，不直接提升RAG回答质量。",
+    "最小试用：在隔离测试环境固定该提交，按官方internal/development.md准备Go服务和Kvrocks等依赖；用一个含有alt图片、无alt图片、表格单元格图片和重复图片的HTML，通过现有摄取流程检查解析JSON、img_id和对象存储字节一致性。不要直接在生产索引上更换版本。",
+    "回归目标：对照上一版本记录序列化字节量、进程峰值RSS、KV占用、耗时与图片保留率。故意制造缓存miss、跨scope引用、摘要损坏和超限图像，分别核验硬失败与警告跳过，不混为一种容错。",
+    "升级先审核依赖和消费者契约：Kvrocks由可选加速器转为生产ingestor必需；依赖image字段的插件需迁移，纯媒体ID变化需关注重复块/重建索引策略。代码Apache-2.0不免除采集内容和外部模型服务自身的许可要求。",
+    "验收补充：只使用自制且获准的HTML固定夹具，对照旧版内联Base64与新版引用最终产生的图像字节和正文/顺序等价；成功后缓存清理、失败后缓存保留到TTL，以及过期后重跑回填分别验收。无需上传私人文档进行首轮测试。"
+  ],
+  "sources": [
+    {
+      "title": "RAGFlow 10月28日主分支提交：HTML media references",
+      "url": "https://github.com/infiniflow/ragflow/commit/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a"
+    },
+    {
+      "title": "MediaRef数据契约",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/entity/media.go"
+    },
+    {
+      "title": "运行域媒体缓存、完整性与生命周期",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/mediacache/store.go"
+    },
+    {
+      "title": "HTML解析器引用输出",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/parser/parser/html_parser.go"
+    },
+    {
+      "title": "图像按需读取与上传",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/component/chunker/image_upload.go"
+    },
+    {
+      "title": "作者HTML引用测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/parser/parser/html_media_test.go"
+    },
+    {
+      "title": "可选真实服务集成测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/pipeline/html_media_real_integration_test.go"
+    },
+    {
+      "title": "Go ingestor开发与依赖说明",
+      "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/development.md"
+    },
+    {
+      "title": "RAGFlow正式版与nightly",
+      "url": "https://github.com/infiniflow/ragflow/releases"
+    }
+  ],
+  "read_scope": "核查时间2026-10-29 UTC。已读固定提交d697b041的核心新增MediaRef、运行域缓存、媒体解析与物化实现，以及HTML解析、上传、视觉增强、依赖校验、清理相关差异；核对作者HTML/分块/缓存测试和可选真实服务测试入口，并阅读开发说明更新和发布页。没有逐文件审计该66文件提交的全部无关重构，没有运行测试或服务；不是论文全文研读。早期PR网页与当前提交存在设计差异，结论按固定代码版本限定。"
+}
