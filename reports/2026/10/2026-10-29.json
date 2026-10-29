@@ -1,0 +1,267 @@
+{
+  "date": "2026-10-29",
+  "title": "AI 工程研究日报",
+  "edition_label": "生成视图贴图整合 / HTML媒体引用 / 二进制重连边界",
+  "summary": "本期收录3项增量：新论文将不一致生成视图配准为Mesh纹理，RAGFlow将HTML图片改为运行域媒体引用，OpenAI Python正式版修复重连队列的二进制帧类型。各自解决纹理融合、摄取数据搬运和传输恢复问题，不等同于角色身份、RAG质量或业务恰好一次执行已获保证。",
+  "notice": "对照10月28日报告，并读取10月9日至28日全部20期历史去重。公开研究草稿；来源事实、工程建议和未知分别标注。未训练模型、运行推理或调用付费API。无新增仅指本轮原始来源检索未发现符合收录标准的实质变化，不代表领域没有进展。",
+  "verified_at": "2026-10-29T00:10:06Z",
+  "items": [
+    {
+      "id": "texture-consolidation-generated-views",
+      "category": "数字人 / 几何",
+      "title": "Texture Consolidation：生成多视图先配准，再合成Mesh贴图",
+      "finding": "新论文给出置信度加权曲面光流＋梯度域拼接，缓解稀疏生成视图的重影和接缝；有公开C++实现，但代码初始提交早于论文，不是今日新开源。",
+      "relevance": "适合已有UV网格和相机的静态RGB贴图后处理；不生成几何或可驱动高斯，身份保持仍需单独检查。",
+      "action": "先按官方三阶段示例核查环境，再固定几何/相机对比直接混合、仅配准、配准＋拼接；身份敏感区域另验漂移。",
+      "caveat": "物体实验并非人脸验证；需要连通Mesh和干净UV；相机误差、重复图案冲突、纹理漂移及默认参数差异均可能影响结果，本次未运行。",
+      "recency_label": "10月28日论文公告｜已有开源实现，新论文细读",
+      "source_date": "2026-10-26T18:16:12Z（论文v1）；2026-10-28（cs.GR公告）；代码初始提交2026-10-09T22:56:05Z，仓库首次转公开时间未核实",
+      "sources": [
+        {
+          "title": "论文 v1（18页，方法、实验表与附录）",
+          "url": "https://arxiv.org/pdf/2610.36098v1"
+        },
+        {
+          "title": "arXiv 版本与提交时间",
+          "url": "https://arxiv.org/abs/2610.36098"
+        },
+        {
+          "title": "cs.GR 2026-10-28 公告列表",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        },
+        {
+          "title": "官方实现与自定义数据说明（固定提交）",
+          "url": "https://github.com/hliuw/TextureConsolidation/tree/557829dee326ca26b91b416d7707b06171ead772"
+        },
+        {
+          "title": "初始代码提交（2026-10-09，不是今日首次开源）",
+          "url": "https://github.com/hliuw/TextureConsolidation/commit/ca3ca69e40bf366301a4dbd72887ae49cdc7bb7d"
+        },
+        {
+          "title": "10月26日相机JSON解析与腐蚀参数更新",
+          "url": "https://github.com/hliuw/TextureConsolidation/commit/d0bae72b5c36517fdcb189ed148cbd0b58c11534"
+        },
+        {
+          "title": "BSD-3-Clause代码许可证",
+          "url": "https://github.com/hliuw/TextureConsolidation/blob/557829dee326ca26b91b416d7707b06171ead772/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-29/texture-consolidation-generated-views.md"
+    },
+    {
+      "id": "ragflow-html-media-reference",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow HTML图片改传引用：少搬Base64，先补缓存与消费边界",
+      "finding": "10月28日主分支把HTML内嵌图片放入运行域Kvrocks，解析项只传media_ref，在视觉增强/上传时按需读回；缓存miss与损坏不再以仅剩caption的方式悄悄成功。",
+      "relevance": "适合图表密集知识库的数据摄取工程，改善载荷传递与完整性；不等同于新检索算法或已证实的召回提升。",
+      "action": "先用固定提交在隔离环境比较图片保留率、JSON大小、RSS与KV占用，补测缺缓存、过期、跨域及自定义image字段消费者。",
+      "caveat": "本次HTML路径变化，不能外推到所有格式；KV变成生产ingestor必需；尚未独立复现或核验稳定发布包。",
+      "recency_label": "10月28日主分支新增；非新稳定版",
+      "source_date": "2026-10-28 11:47:53 UTC（代码合入）；无对应论文发布日期",
+      "sources": [
+        {
+          "title": "RAGFlow 10月28日主分支提交：HTML media references",
+          "url": "https://github.com/infiniflow/ragflow/commit/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a"
+        },
+        {
+          "title": "运行域媒体缓存、完整性与生命周期",
+          "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/ingestion/mediacache/store.go"
+        },
+        {
+          "title": "作者HTML引用测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/d697b0410ad68493ed5ac6dc62ad3aad4c7a939a/internal/parser/parser/html_media_test.go"
+        },
+        {
+          "title": "RAGFlow正式版与nightly",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-29/ragflow-html-media-reference.md"
+    },
+    {
+      "id": "openai-python-341-binary-reconnect",
+      "category": "大模型前沿用法",
+      "title": "OpenAI Python 3.41.0：断线恢复保留二进制帧，但不保证业务恰好执行一次",
+      "finding": "新发布的 Python SDK 保留重连缓存中 bytes 的二进制帧类型，并通过 unsent_frames 暴露原始未发送数据；修复旧版强制 UTF-8 解码，但不是业务无损重放。",
+      "relevance": "有助于检查流式代理、语音交互链路的断线恢复边界；不能推导为模型质量、口型或音画同步改进。",
+      "action": "先用官方本地 WebSocket 对端测试比较 v3.40.0 与 v3.41.0，检查帧类型、顺序、中止与二次失败，再接真实任务。",
+      "caveat": "未运行测试；发送失败的已尝试帧仍可能被释放，端点格式、会话恢复、去重及过期媒体策略由应用另行处理。",
+      "recency_label": "正式版新增传输行为｜10月28日UTC发布",
+      "source_date": "2026-10-28T22:26:54Z（上海2026-10-29 06:26:54）",
+      "sources": [
+        {
+          "title": "OpenAI Python v3.41.0 正式发布",
+          "url": "https://github.com/openai/openai-python/releases/tag/v3.41.0"
+        },
+        {
+          "title": "#4191：新旧行为与作者验证记录",
+          "url": "https://github.com/openai/openai-python/commit/f0798682d36be3bb79293d40c260cd93dbabf939"
+        },
+        {
+          "title": "v3.41.0 发送队列完整实现",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_send_queue.py"
+        },
+        {
+          "title": "v3.41.0 同步和异步重连实现",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_websocket_connection.py"
+        },
+        {
+          "title": "v3.41.0 异常恢复字段",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_exceptions.py"
+        },
+        {
+          "title": "本地 WebSocket 对端回归测试",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_websocket_raw_reconnect_wire.py"
+        },
+        {
+          "title": "队列容量与恢复失败测试",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_send_queue_reconnect.py"
+        },
+        {
+          "title": "可重连关闭码与回调契约",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/types/websocket_reconnection.py"
+        },
+        {
+          "title": "Python SDK v3.41.0许可证",
+          "url": "https://github.com/openai/openai-python/blob/v3.41.0/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-29/openai-python-341-binary-reconnect.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "verified_at": "2026-10-29T00:09:53.225389+00:00",
+      "selected": [
+        "texture-consolidation-generated-views"
+      ],
+      "coverage": [
+        {
+          "title": "Texture Consolidation",
+          "status": "新论文公告，选入；代码初始提交10月9日，不伪称今日开源",
+          "url": "https://github.com/hliuw/TextureConsolidation"
+        },
+        {
+          "title": "Video Diffusion Avatars",
+          "status": "初始推理代码10月18日、最新提交10月20日；10月20日报已有条目，本轮无新实质变化，排除",
+          "url": "https://github.com/SimonGiebenhain/video-diffusion-avatars"
+        },
+        {
+          "title": "UniForge3D",
+          "status": "已打开官方当前README，未发现可确认的新训练/驱动发布，未重复收录",
+          "url": "https://github.com/xibushu/UniForge3D"
+        },
+        {
+          "title": "Blendshape Generation for Models with Disconnected Parts",
+          "status": "10月26日提交/27日公告，VRoid11部件与52表情，有相关性；本轮仅初读未完成全文/权重核验，暂不作详解或可运行推荐",
+          "url": "https://arxiv.org/abs/2610.35076"
+        },
+        {
+          "title": "arXiv cs.GR Oct28列表",
+          "status": "已查看DomeGS/StereoSplat/Honeycomb-Surfels/CTBakeGS/GraftRay/LingGS等标题与范围，未在本轮读到全文，不宣称均已评估；选最贴近静态生成贴图瓶颈者细读",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        }
+      ],
+      "limits": "非全网穷尽。暂无额外可确认的生成式Gaussian或可驱动头像新开放条目。",
+      "category": "数字人 / 几何",
+      "status": "新增1篇完整论文/工程详解；生成式高斯与可驱动头像未确认额外新增",
+      "source_date": "2026-10-26（论文提交）/2026-10-28（公开列表）",
+      "sources": [
+        {
+          "title": "Texture Consolidation",
+          "url": "https://github.com/hliuw/TextureConsolidation"
+        },
+        {
+          "title": "Video Diffusion Avatars",
+          "url": "https://github.com/SimonGiebenhain/video-diffusion-avatars"
+        },
+        {
+          "title": "UniForge3D",
+          "url": "https://github.com/xibushu/UniForge3D"
+        },
+        {
+          "title": "Blendshape Generation for Models with Disconnected Parts",
+          "url": "https://arxiv.org/abs/2610.35076"
+        },
+        {
+          "title": "arXiv cs.GR Oct28列表",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG、采集 / 工具",
+      "verified_at": "2026-10-29T00:08:54.862Z",
+      "status": "收录RAGFlow HTML媒体引用新工程机制；Crawl4AI无新的符合条件更新。",
+      "selected_id": "ragflow-html-media-reference",
+      "checks": [
+        {
+          "title": "RAGFlow Oct28主分支提交",
+          "url": "https://github.com/infiniflow/ragflow/commits/main/",
+          "finding": "通过GitHub API当日提交列表和固定提交连接器核验，网页commits缓存曾停留9月，故不以缓存页面判断无新增。全日多个改动中只深读媒体引用；未逐项审计其余提交。"
+        },
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases",
+          "finding": "最新稳定仍v0.9.5，10月14日已在历史日报收录；API since Oct28返回空提交，不重复。"
+        },
+        {
+          "title": "Read the Route / HyperAddress",
+          "url": "https://arxiv.org/abs/2610.35412",
+          "finding": "核回官方摘要和10月26日版本日期，仅作为线索；本轮未全文研读，不作为完整论文条目。"
+        },
+        {
+          "title": "RAGFlow releases",
+          "url": "https://github.com/infiniflow/ragflow/releases",
+          "finding": "稳定v0.27.3，RC与滚动nightly分别标注；不把旧创建时间当今日首次发布。"
+        }
+      ],
+      "source_date": "2026-10-28（RAGFlow代码合入）；2026-10-29核查",
+      "sources": [
+        {
+          "title": "RAGFlow Oct28主分支提交",
+          "url": "https://github.com/infiniflow/ragflow/commits/main/"
+        },
+        {
+          "title": "Crawl4AI releases",
+          "url": "https://github.com/unclecode/crawl4ai/releases"
+        },
+        {
+          "title": "Read the Route / HyperAddress",
+          "url": "https://arxiv.org/abs/2610.35412"
+        },
+        {
+          "title": "RAGFlow releases",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "收录 OpenAI Python v3.41.0 的二进制帧重连机制，已读实现与本地对端测试但未执行。Claude平台仍以10月23日为最新记录，Claude Code仍2.1.312；Codex最新稳定版0.165.0与昨日重复，新0.166 alpha只有版本占位说明，不包装成已稳定的新用法。OpenAI10月28日新增订阅API额度福利属于开放/计费变化，本栏目不以此替代技术条目。",
+      "source_date": "核查2026-10-29；Python v3.41.0发布2026-10-28T22:26:54Z",
+      "sources": [
+        {
+          "title": "OpenAI Python v3.41.0 正式发布",
+          "url": "https://github.com/openai/openai-python/releases/tag/v3.41.0"
+        },
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Claude平台发布说明",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Claude Code releases",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "Codex releases",
+          "url": "https://github.com/openai/codex/releases"
+        }
+      ]
+    }
+  ]
+}
