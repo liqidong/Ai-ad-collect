@@ -1,0 +1,106 @@
+{
+  "id": "openai-python-341-binary-reconnect",
+  "title": "OpenAI Python 3.41.0：断线恢复保留二进制帧，但不保证业务恰好执行一次",
+  "problem": "流式代理或语音应用断线后，恢复的不只是连接，还包括待发送内容的类型、顺序与业务含义。旧实现会把重连窗口里 send_raw(bytes) 的二进制内容按 UTF-8 解码：可解码的字节变成文本帧，不可解码的字节报错。3.41.0 修复这个具体传输缺陷，并提供保留原类型的未发送帧读取接口；它不是新模型，也不是首次支持重连。",
+  "inputs": "无需模型训练。输入是 Python SDK WebSocket 连接上的 str 或 bytes 数据、重连回调 on_reconnecting、重试/延迟/队列容量配置。对线上使用仍需相应 API 权限、有效认证及受支持的端点协议；新传输行为不意味着任意端点都接受任意二进制媒体。可先用本地测试对端和假凭据验证，避免真实业务数据或付费请求。",
+  "outputs": "恢复成功时，队列按原有类型发出文本帧或二进制帧。恢复中止且抛出 WebSocketConnectionClosedError 时，unsent_frames 提供仍保留的混合帧；旧 unsent_messages 保持字符串兼容接口。输出不包含模型质量改进、服务端处理确认、音画同步保证或持久化任务检查点。",
+  "pipeline": [
+    {
+      "title": "1. 接收正常发送或重连期间的新帧",
+      "explanation": "正常连接直接发送原数据；正在重连时把 str/bytes 原样放入发送队列，不再预先将 bytes 解码为 UTF-8。输出是保留内容类型的排队项。"
+    },
+    {
+      "title": "2. 以字节容量约束缓存",
+      "explanation": "字符串按 UTF-8 编码长度计费，bytes 按原始长度计费。队列默认上限为 1,048,576 字节，超限抛出 WebSocketQueueFullError，而不是无限接收。正在发送的队列项仍占额度，避免恢复期间隐性超配。"
+    },
+    {
+      "title": "3. 按既有重连策略建立新连接",
+      "explanation": "回调与连接工厂存在、关闭码可恢复且未主动关闭时，执行受次数约束的重连。回调可更新请求参数或返回 abort。这个回调机制是已有能力；本次增量是待发送帧的类型保存。"
+    },
+    {
+      "title": "4. 发出缓存并处理再次失败",
+      "explanation": "同步或异步队列将原数据交给底层 send。必须注意 SDK 连接层调用 flush 时使用 requeue_failed=False：已尝试发送的项即便失败也从这批缓存释放，后续未尝试项可保留。因此不能把“有恢复队列”解释为可靠消息系统或无损重放。"
+    },
+    {
+      "title": "5. 应用决定恢复、丢弃或结束",
+      "explanation": "读取 unsent_frames 可得到异常仍保存的原始 str/bytes 和顺序。兼容字段 unsent_messages 会把可解码二进制表示成文本、略过不可解码字节，因此不能用它恢复二进制。应用需结合会话状态与业务序号自行判断是否重试，不能盲目把所有内容重发。"
+    }
+  ],
+  "mechanism": "关键变化是端到端保留帧类型：队列由纯字符串变为 str|bytes，字节预算按对应类型计算，恢复路径不再做强制解码。异常把原帧与兼容文本列表分开暴露；普通异常属性快照使用脱敏容器，显式读取恢复属性仍返回真实内容。它解决 SDK 缓存与重连的表示错误，不解决服务端是否已消费、重放副作用、语音时效性或跨会话状态恢复。",
+  "results": [
+    {
+      "claim": "作者报告旧传输在 28 个 wire cases 失败，新实现在相关验证中通过。",
+      "evidence": "#4191 描述列出 357 项队列/恢复/会话测试与 328 项 URL/安全测试，另记 109 项聚焦验证。测试集合可能重叠，不应把数量相加当独立样本；本轮未运行。非论文，没有数据集质量指标或实验表号。",
+      "source": "https://github.com/openai/openai-python/commit/f0798682d36be3bb79293d40c260cd93dbabf939"
+    },
+    {
+      "claim": "仓库提供可检查的本地对端验证，不只 mock 类型断言。",
+      "evidence": "test_websocket_raw_reconnect_wire.py 用本地 WebSocket server，第一次握手后关闭码 1012，下一次返回合成事件。参数覆盖普通文本、UTF-8 JSON bytes、不合法 UTF-8 bytes；同步和异步均断言收到的数据与原 payload 一致。",
+      "source": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_websocket_raw_reconnect_wire.py"
+    },
+    {
+      "claim": "中止重连后可检查混合帧原顺序，同时保留旧文本接口。",
+      "evidence": "同一测试文件构造 first、不可解码 bytes、JSON bytes、last，断言 unsent_frames 等于原列表，unsent_messages 只保留可表示为文本的内容；并验证普通异常属性快照不直接显示测试载荷。",
+      "source": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_websocket_raw_reconnect_wire.py"
+    },
+    {
+      "claim": "不能据此宣称零丢失、恰好一次或自动恢复语音。",
+      "evidence": "连接实现的 _flush_send_queue 明确使用 requeue_failed=False，SendQueue 的 finally 可释放已尝试项；test_send_queue_reconnect.py 还显式测试失败后的额度释放。这是代码边界，不是模型效果测试。",
+      "source": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_send_queue_reconnect.py"
+    }
+  ],
+  "limitations": [
+    "可用状态：v3.41.0 已正式发布，2026-10-28T22:26:54Z（上海10月29日06:26）；重连必须经过相应 SDK 路径。接口可下载不等于所有账户服务端能力均已验证。",
+    "此修复不改变服务端输入格式契约，不能因为 send_raw 支持 bytes 就把原始音频或视频直接发往只接受 JSON 的端点。",
+    "队列有容量限制，恢复中止、重试耗尽或刷新再次失败仍需处理；没有业务级确认、去重或端到端 exactly-once 保证。",
+    "旧 unsent_messages 接口仍有损地表示混合帧。自定义异常子类若重复声明 unsent_messages: list[str]，作者提示可能遇到 Pyright 类型问题。",
+    "异常的普通属性快照脱敏不是通用日志防泄漏。显式记录 unsent_frames、unsent_messages 仍可能输出业务内容。",
+    "本轮只读实现与测试，未安装新 SDK、未运行测试、未调用生产 API，不能声称实际故障率或延迟已经改善。"
+  ],
+  "engineering_notes": [
+    "最小试用建议：在独立测试环境固定 v3.41.0，先阅读并运行仓库 test_websocket_raw_reconnect_wire.py；这是已有本地对端测试，不需把私有材料送往模型。再用 v3.40.0 做相同故障注入对照。",
+    "验收顺序：文本/可解码 bytes/任意 bytes 的类型和内容 → 混合帧顺序 → 回调 abort → 队列超限 → 恢复后再次发送失败。分别统计异常、丢弃、重复和顺序，不能只记录“重连成功”。",
+    "对交互式数字人或语音代理，建议把输入采集时间、播放取消标记、业务事件 ID 独立管理。过期语音应由应用决定丢弃，不应恢复后继续播放旧指令；这是工程推断，并非本版本已实现。",
+    "对工具调用和写操作，先用服务端事件或幂等标识确认完成状态，再决定重试。不要借此次升级盲目重放付费或有副作用的任务。",
+    "升级影响主要落在 Python SDK 传输层，无训练或 GPU 要求；SDK 是 Apache-2.0，线上服务用量与条款仍单独适用。"
+  ],
+  "sources": [
+    {
+      "title": "OpenAI Python v3.41.0 正式发布",
+      "url": "https://github.com/openai/openai-python/releases/tag/v3.41.0"
+    },
+    {
+      "title": "#4191：新旧行为与作者验证记录",
+      "url": "https://github.com/openai/openai-python/commit/f0798682d36be3bb79293d40c260cd93dbabf939"
+    },
+    {
+      "title": "v3.41.0 发送队列完整实现",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_send_queue.py"
+    },
+    {
+      "title": "v3.41.0 同步和异步重连实现",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_websocket_connection.py"
+    },
+    {
+      "title": "v3.41.0 异常恢复字段",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/_exceptions.py"
+    },
+    {
+      "title": "本地 WebSocket 对端回归测试",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_websocket_raw_reconnect_wire.py"
+    },
+    {
+      "title": "队列容量与恢复失败测试",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/tests/test_send_queue_reconnect.py"
+    },
+    {
+      "title": "可重连关闭码与回调契约",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/src/openai/types/websocket_reconnection.py"
+    },
+    {
+      "title": "Python SDK v3.41.0许可证",
+      "url": "https://github.com/openai/openai-python/blob/v3.41.0/LICENSE"
+    }
+  ],
+  "read_scope": "完整阅读 v3.41.0 的 _send_queue.py、_websocket_connection.py、test_websocket_raw_reconnect_wire.py、websocket_reconnection.py；阅读 _exceptions.py 恢复字段区域、test_send_queue_reconnect.py 的队列/失败恢复部分，以及 #4191 全部可见差异与正式发布说明。未审计整个 SDK，未运行作者测试；作者计数不是独立复现结果。"
+}
