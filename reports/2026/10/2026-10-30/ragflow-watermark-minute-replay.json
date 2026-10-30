@@ -1,0 +1,83 @@
+{
+  "id": "ragflow-watermark-minute-replay",
+  "title": "RAGFlow：增量同步的查询与本地过滤统一到同一水位分钟",
+  "problem": "增量采集用上次同步水位作为新一轮下界。Confluence CQL与Jira JQL仅用分钟表示时间，而应用内时间戳含秒；Jira还可向前回看一段时间。旧本地过滤要求updatedAt严格晚于原始start，导致远端特意返回的分钟内或缓冲区记录再次被丢弃。与前一期HTML媒体引用改动不同，本次改变的是增量窗口的保留语义。修复目标是让查询和过滤使用同一有效下界，并非保证所有服务端延迟、删除或权限变化都被捕获。",
+  "inputs": "无模型训练。输入为已授权Confluence/Jira连接器配置、上一轮WindowStart、当前WindowEnd、源记录更新时间及内容。Confluence按页面/空间等既有范围构造CQL，附件查询继承同一下界函数；Jira使用项目或自定义JQL、时区偏移以及time_buffer_seconds。使用前提是部署包含此提交的Go同步器和合法可访问的源服务。",
+  "outputs": "通过窗口检查的SourceDocument批次与检查点；同一分钟或回看区间的记录可被再次读取。输出不是新embedding、检索答案或自动修复完成的知识库；后续解析、索引更新及去重仍是其他阶段。",
+  "pipeline": [
+    {
+      "title": "1. 固定本轮窗口与授权范围",
+      "explanation": "输入连接器的开始/结束时间及源范围，沿用已有页面空间、项目/JQL过滤；输出本轮采集上下文。不要通过扩大权限来弥补漏项。首次全量扫描和空水位不应凭空附加增量下界。"
+    },
+    {
+      "title": "2. 只计算一次有效下界语义",
+      "explanation": "Confluence把start转UTC后向下截断到整分钟。Jira先按配置回退timeBuffer、必要时限制到Unix起点，再向下截断到整分钟。输出lower；查询构造与本地过滤各自调用同一个helper，避免两套公式漂移。"
+    },
+    {
+      "title": "3. 用源服务能表达的时间发查询",
+      "explanation": "CQL/JQL使用updated/lastmodified >= lower；既有上界查询扩至下一分钟并使用严格小于，随后仍用精确WindowEnd过滤多取的记录。Jira再按配置时区格式化分钟文本。输出分页结果，不把远端返回直接当作最终入库批准。"
+    },
+    {
+      "title": "4. 保留边界及回看区间",
+      "explanation": "本地仅排除updatedAt早于lower的记录，并排除晚于WindowEnd的记录；等于下界可以保留。Jira在非首次扫描且源更新时间非零时应用该下界。输出与远端取数窗口相符的记录，不再用原始秒级start收紧。"
+    },
+    {
+      "title": "5. 构造文档并验证可重复消费",
+      "explanation": "沿用既有issueDocument/附件构造与检查点路径输出批次。工程接入时应以源ID和版本检查下游幂等更新，记录边界样本是否被保留、重复是否合并；这些是建议的验收，不是本次代码已证明的端到端性质。"
+    }
+  ],
+  "mechanism": "核心是查询下界与客户端过滤下界的一致性，而不是扩大远端查询后再恢复旧过滤。Confluence示例start=10:05:30应允许10:05:10进入本轮；Jira的回看还必须在本地继续有效。回看采用重叠重读换取边界覆盖，因此需要下游幂等。上界扩分钟和精确过滤在本次差异中不是新引入的能力，不能把已有逻辑算作本次全部创新。",
+  "results": [
+    {
+      "claim": "Confluence新测试覆盖秒级水位之前、同一分钟内的记录",
+      "evidence": "TestConfluenceWindowKeepsWhatTheCQLAlreadyReturned使用start 10:05:30、end 10:06:00，要求10:05:10保留，10:04:59排除。是作者加入的断言，不是本次执行通过报告。",
+      "source": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/confluence_test.go#L391"
+    },
+    {
+      "claim": "Jira新测试覆盖默认回看与自定义120秒回看",
+      "evidence": "默认例以10:00:20水位保留10:00:00记录；120秒配置把有效查询下界变为09:58，保留09:58:10记录，并断言批次中恰有一个目标源ID。该1条是夹具预期数量，不是吞吐或召回提升指标。",
+      "source": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/jira_test.go#L573"
+    },
+    {
+      "claim": "修复已合并到公开主分支",
+      "evidence": "GitHub提交3f8aab31b10af63ac5aa144d1f698339afb22040的committer时间为2026-10-29T12:34:43Z，修改两个连接器及对应测试。未确认正式发布包包含。",
+      "source": "https://github.com/infiniflow/ragflow/commit/3f8aab31b10af63ac5aa144d1f698339afb22040"
+    }
+  ],
+  "limitations": [
+    "没有生产漏项比例、检索召回率、吞吐或端到端幂等性实测，不能宣称知识库质量已提升。",
+    "允许重叠读取不是恰好一次；下游是否按源ID/版本覆盖、能否处理删除与权限撤销需单独验收。",
+    "无法自动找回旧版本已遗漏的全部记录；是否回补以及回补窗口，应根据保留的水位和源系统记录决定。",
+    "时间缓冲不能覆盖无限迟到事件，时区配置和源时间解析仍可能出错；本次未审计所有连接器或所有时间路径。",
+    "读取了新增测试而未执行，未运行真实Confluence/Jira；正式发行版本、部署成本和生产可用性未确认。"
+  ],
+  "engineering_notes": [
+    "先锁定提交并检查部署实际使用的是Go同步器；不要把仓库main更新视为现有服务已修复。",
+    "最小试用：按仓库Go模块说明，在隔离副本执行新增ConfluenceWindow/JiraSyncKeeps/JiraSyncHonours相关测试，再增加等于下界、恰好end、end之后、跨时区和重复两轮同步样本。",
+    "验收应同时检查源记录数、稳定源ID、最终索引版本与重复数量；只看到HTTP成功或查询返回更多记录不足以说明修复完成。",
+    "采集授权范围、版权与隐私处理沿用原要求；窗口修复不会扩大访问权限，也不替代数据留存审查。"
+  ],
+  "sources": [
+    {
+      "title": "RAGFlow 10月29日合并提交与完整差异",
+      "url": "https://github.com/infiniflow/ragflow/commit/3f8aab31b10af63ac5aa144d1f698339afb22040"
+    },
+    {
+      "title": "Confluence 查询与窗口过滤实现",
+      "url": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/confluence.go"
+    },
+    {
+      "title": "Jira 查询、回看缓冲与批处理实现",
+      "url": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/jira.go"
+    },
+    {
+      "title": "Confluence 边界回归测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/confluence_test.go"
+    },
+    {
+      "title": "Jira 水位分钟与120秒缓冲回归测试",
+      "url": "https://github.com/infiniflow/ragflow/blob/3f8aab31b10af63ac5aa144d1f698339afb22040/internal/syncer/connector/jira_test.go"
+    }
+  ],
+  "read_scope": "已通过GitHub API读取固定提交的完整差异与时间元数据，下载两份连接器和两份测试源文件，并精读变更函数、查询构造、窗口过滤、批次输出及新增回归夹具；不是论文细读，不是仓库全代码审计。未运行测试、源服务或RAG任务。"
+}
