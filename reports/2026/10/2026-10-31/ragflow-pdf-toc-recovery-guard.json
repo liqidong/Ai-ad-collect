@@ -1,0 +1,96 @@
+{
+  "id": "ragflow-pdf-toc-recovery-guard",
+  "title": "RAGFlow：恢复 PDF 原生文字后，别把目录点线误认成正文",
+  "problem": "PDF目录清理和文字恢复各自合理，组合后却会相互抵消：此前的原生文字恢复会补回OCR漏掉的长串引导点线，而目录模块把长文本框当作正文证据。只要出现足够多这种长框，即使书签已标出目录页，正文保护规则也会保留它，导致目录噪声进入下游分块。新修复不是放松所有正文保护，而是更准确地解释恢复出来的文本形状。",
+  "inputs": "无需训练。运行输入是DeepDoc解析后的TextBox序列（文本、页码等）、可用的PDF书签目录页集合、此次解析的起始页与文档总页数。源PDF可有或没有书签，目录引导点线可能与标题/页码同框、分框或被空格切开。真实文件验证使用进程内DeepDoc、DLA+OCR及remove_toc=true。",
+  "outputs": "返回剔除确认目录页后的文本框序列，供后续TextMerge、阅读顺序整理与BoxesToSections生成章节；不是生成新的OCR模型、向量或答案。被保护的正文以及无法确认的页面保留。",
+  "pipeline": [
+    {
+      "title": "1. 上游恢复文字，保留尚未合并的框",
+      "explanation": "PDF原生字符与OCR结果形成页面文本框。目录识别在文本合并之前执行，否则点线和条目边界可能消失。此次修复针对恢复产生的长点线框，并不重写OCR识别。"
+    },
+    {
+      "title": "2. 按页重新解释目录形状",
+      "explanation": "纯点线长框视作排版填充，不计正文。含至少3段“点线+页码”的长框作为合并目录块。单条长目录行要求末尾是页码且点线至少6个字符；短条目要求至少4个，空格分开的点线累计计算。页码支持阿拉伯数字、全角数字及罗马数字。"
+    },
+    {
+      "title": "3. 汇总候选页，保留正文否决权",
+      "explanation": "长目录条目同时计入列表数量与标记数量，避免无书签且条目很长时漏检。普通列表需至少4个短框/长条目及3个标记，或满足合并目录块条件。真正长正文框超过2个，或超过2个中等长度非条目标记框，仍会阻止整页删除；短省略号加数字不能自动充当目录条目。"
+    },
+    {
+      "title": "4. 限定目录范围，再交回布局流程",
+      "explanation": "书签提供绝对目录页候选。无书签的形状回退只在前部解析范围运行，遇到正文即停止继续扩展；整个文档只有目录时保留原文。最终过滤框进入后续合并与分块。工程上要对删除页做审计，而不能只看章节数量减少。"
+    }
+  ],
+  "mechanism": "核心是将“文本长度”与“正文证据”解耦：点线不是语义正文，目录长标题也不是自然段。isTOCEntryLine使用末尾锚定的点线/页码语法，向前跨空格统计点线长度，且罗马数字需要词边界，避免把英文单词开头误判为页码。与旧逻辑相比，已确认的目录块不再反过来增加prose计数，长条目也不再因short数量不足而漏检。保护规则、前部范围约束和全目录文档保护均保留。",
+  "results": [
+    {
+      "claim": "作者真实文件测试：目录清理恢复，但不是完全成功",
+      "evidence": "PR报告11页无书签PDF，包含6页目录。修复前BoxesTOCRemoved=0、135个sections；修复后移除259个框、剩39个sections，目录前5页被移除且前两章正文保留；最后目录页因广告块仍被正文保护保留。本次未取得该PDF独立复现。",
+      "source": "https://github.com/infiniflow/ragflow/pull/21768"
+    },
+    {
+      "claim": "作者202个合成布局差分检查报告4个新增识别，未损失正文",
+      "evidence": "PR给出202种中英文/编号/标题/点线/罗马页码/书签组合的差分结果：4种新增目录检测，没有正文丢失或既有移除回归。仓库新增用例具体覆盖分段点线、长条目、罗马页码及长短省略号正文。这是作者结果和可读测试定义，不是本次执行结果。",
+      "source": "https://github.com/infiniflow/ragflow/pull/21768"
+    },
+    {
+      "claim": "代码具备明确的反例防护，而非单纯加大删除力度",
+      "evidence": "新增测试要求长短正文中的省略号+数字继续保留；包含以罗马数字字母开头英文单词的文本不能被误判成多条目录。测试断言对被保护页面保留7/7或4/4文本框。没有提供RAG答案准确率、召回率或大型多域数据集指标。",
+      "source": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/layout/toc_header_footer_test.go"
+    },
+    {
+      "claim": "修复代码可用，但rc3发布包不包含它",
+      "evidence": "GitHub compare显示v1.0.0-rc3到该修复为ahead 1、behind 0。rc3于10月30日11:53:15 UTC发布，修复12:05:24 UTC合并。不能把同日发版视作已打包此修复。",
+      "source": "https://github.com/infiniflow/ragflow/compare/v1.0.0-rc3...dce85b304377cdca493c66c6de11194b551b7600"
+    }
+  ],
+  "limitations": [
+    "作者明确保留带重复广告或URL文字的目录页，这是当前已知未解决情况。",
+    "字符阈值与语法启发式依赖排版；真实的短正文、异常点线、混排页及OCR错误仍应做针对性回归。",
+    "无书签回退受前部范围约束，不能宣传为任意文档中部目录识别。",
+    "未独立运行测试、安装RAGFlow或重新索引文档，不能据此证明生产效果。",
+    "开源仓库Apache-2.0不改变输入PDF版权、数据访问权限或第三方模型/服务条件。"
+  ],
+  "engineering_notes": [
+    "最小试用：在已有可构建的隔离RAGFlow环境固定dce85b304377cdca493c66c6de11194b551b7600，运行作者给出的bash build.sh --test ./internal/deepdoc/parser/pdf/layout/，再跑少量已授权PDF对照；不要直接覆盖生产索引。",
+    "建议验收同时记录目录噪声减少量和正文保留率；章节数下降只说明输出变少，不天然代表质量提升。保留页码与删除原因可帮助人工核验。",
+    "这类回归说明预处理模块不能独立验收：上游文字恢复扩大了可见文本，下游过滤规则也必须加入恢复形状的测试。可复用的是组合回归设计与分类逻辑，不必完整迁移RAGFlow。",
+    "CPU/内存/GPU整体需求取决于DeepDoc与OCR配置，本补丁未给出新的算力或性能数字。没有训练权重发布，也没有新增模型训练步骤。"
+  ],
+  "sources": [
+    {
+      "title": "修复 PR：原因、真实文件测试与已知局限",
+      "url": "https://github.com/infiniflow/ragflow/pull/21768"
+    },
+    {
+      "title": "合并提交与代码差异",
+      "url": "https://github.com/infiniflow/ragflow/commit/dce85b304377cdca493c66c6de11194b551b7600"
+    },
+    {
+      "title": "目录识别实现：阈值、正文保护和页面范围",
+      "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/layout/toc_header_footer.go"
+    },
+    {
+      "title": "合成回归用例",
+      "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/layout/toc_header_footer_test.go"
+    },
+    {
+      "title": "PDF 主流程：先目录过滤，再文本合并",
+      "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/parser.go"
+    },
+    {
+      "title": "v1.0.0-rc3 与本修复的版本差异",
+      "url": "https://github.com/infiniflow/ragflow/compare/v1.0.0-rc3...dce85b304377cdca493c66c6de11194b551b7600"
+    },
+    {
+      "title": "v1.0.0-rc3 发布说明",
+      "url": "https://github.com/infiniflow/ragflow/releases/tag/v1.0.0-rc3"
+    },
+    {
+      "title": "仓库 Apache-2.0 许可",
+      "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/LICENSE"
+    }
+  ],
+  "read_scope": "已阅读合并提交完整差异、toc_header_footer.go中的阈值/目录选择/正文保护实现、PR完整说明和测试计划，以及新增回归测试与PDF主流程调用位置；核查了rc3发布元数据、版本compare和LICENSE。未做整仓审计、未运行Go测试、未处理真实PDF。核查时间为2026-10-31 UTC；这是工程代码细读，不是论文全文研读。"
+}
