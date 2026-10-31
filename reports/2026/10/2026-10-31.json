@@ -1,0 +1,221 @@
+{
+  "date": "2026-10-31",
+  "title": "AI 工程研究日报",
+  "edition_label": "单图静态高斯开放 / PDF目录回归 / 脚本调用边界",
+  "summary": "本期收录3项：补读Idol近期开放的单图静态高斯推理SDK及权重，核查10月30日RAGFlow目录识别回归修复和Claude Code 2.1.314脚本失败信号与文件边界改动。Idol不是可驱动头像，rc3不含本次RAGFlow补丁；采集/工具未发现符合标准的新条目。",
+  "notice": "对照10月30日报告，并读取10月9日至30日全部22期历史去重。公开研究草稿；来源事实、工程建议和未知分别标注。未训练模型、运行推理或调用付费API。无新增仅指本轮原始来源检索未发现符合收录标准的实质变化，不代表领域没有进展。",
+  "verified_at": "2026-10-31T00:06:51Z",
+  "items": [
+    {
+      "id": "idol-single-image-static-gaussians",
+      "category": "数字人 / 几何",
+      "title": "Idol：单图直接生成可导出静态高斯，代码与权重已开放",
+      "finding": "近期补收录：10月28日官方上传权重，10月29日SDK初始提交。单张物体照片或生成图经双图像编码、flow采样、八叉树锚点和Gaussian解码，得到标准3DGS PLY及预测相机。不是先生成多视图再优化高斯。",
+      "relevance": "提供可运行的生成式高斯基线，可用于静态物体、道具及造型初始化；不能据此得到表情驱动头像、骨骼绑定人物或精确人脸Mesh。",
+      "action": "在自行完成两个编码器的访问授权并检查依赖许可后，先固定官方提交，用一张自有测试图、50步、262144个高斯做前后侧视检查，再比较不同点数。CLI及Python自定义输入路径已提供；本轮未安装或运行。",
+      "caveat": "训练代码和数据未见公开；作者质量基准没有给出数据集名称/样本数，不能视作通用排名。Idol本身Apache-2.0，但依赖DINOv3与FLUX.2-dev受限模型，不能把整条链路概括为无条件商用。",
+      "recency_label": "近期开放补收录｜非10月30日后首次发布",
+      "source_date": "权重提交2026-10-28T16:04:04Z；SDK提交2026-10-29T20:09:28Z；独立论文未确认",
+      "sources": [
+        {
+          "title": "官方推理SDK、安装说明与作者基准表",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/README.md"
+        },
+        {
+          "title": "官方pipeline：输入、双条件编码、联合latent/camera采样",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/pipeline.py"
+        },
+        {
+          "title": "官方八叉树与Gaussian解码实现",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/models/decoder.py"
+        },
+        {
+          "title": "官方图像编码与访问检查",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/conditioning.py"
+        },
+        {
+          "title": "官方Euler flow采样器",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/sampler.py"
+        },
+        {
+          "title": "官方预处理和裁切模式",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/preprocess.py"
+        },
+        {
+          "title": "官方Gaussian属性、坐标和PLY写出",
+          "url": "https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/gaussian.py"
+        },
+        {
+          "title": "官方模型文件与模型卡",
+          "url": "https://huggingface.co/speridlabs/idol"
+        },
+        {
+          "title": "官方权重提交历史",
+          "url": "https://huggingface.co/speridlabs/idol/commits/main"
+        },
+        {
+          "title": "官方SDK首次提交",
+          "url": "https://github.com/speridlabs/idol-sdk/commit/4702a7f00850e34b6e83a2170cc123c3e9570744"
+        },
+        {
+          "title": "FLUX.2-dev依赖的许可证",
+          "url": "https://huggingface.co/black-forest-labs/FLUX.2-dev/blob/main/LICENSE.md"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-31/idol-single-image-static-gaussians.md"
+    },
+    {
+      "id": "ragflow-pdf-toc-recovery-guard",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow：恢复 PDF 原生文字后，别把目录点线误认成正文",
+      "finding": "10月30日合入的修复重新区分目录引导点线、页码条目和真正正文。作者11页真实文件测试中，过滤的目录文本框从0增至259，输出章节由135降至39；仍有一页目录因广告文字被保留。",
+      "relevance": "针对PDF入库噪声与正文保留之间的冲突，修复的是两个预处理规则组合后的回归，不是检索模型精度突破。",
+      "action": "固定修复提交，在隔离环境比较含点线目录、罗马页码、无书签和带省略号正文的样本；检查被移除页与正文覆盖率，再决定重新入库。",
+      "caveat": "本修复在v1.0.0-rc3之后一个提交，升级rc3并不包含它。作者测试不等于独立复现；目录混广告/URL仍可能保留，不能承诺目录全部清除。",
+      "recency_label": "2026-10-30主分支修复｜代码开放，尚非rc3内容",
+      "source_date": "2026-10-30T12:05:24Z（PR合并）；rc3发布于11:53:15Z，早于本修复",
+      "sources": [
+        {
+          "title": "修复 PR：原因、真实文件测试与已知局限",
+          "url": "https://github.com/infiniflow/ragflow/pull/21768"
+        },
+        {
+          "title": "合并提交与代码差异",
+          "url": "https://github.com/infiniflow/ragflow/commit/dce85b304377cdca493c66c6de11194b551b7600"
+        },
+        {
+          "title": "目录识别实现：阈值、正文保护和页面范围",
+          "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/layout/toc_header_footer.go"
+        },
+        {
+          "title": "合成回归用例",
+          "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/layout/toc_header_footer_test.go"
+        },
+        {
+          "title": "PDF 主流程：先目录过滤，再文本合并",
+          "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/internal/deepdoc/parser/pdf/parser.go"
+        },
+        {
+          "title": "v1.0.0-rc3 与本修复的版本差异",
+          "url": "https://github.com/infiniflow/ragflow/compare/v1.0.0-rc3...dce85b304377cdca493c66c6de11194b551b7600"
+        },
+        {
+          "title": "v1.0.0-rc3 发布说明",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/v1.0.0-rc3"
+        },
+        {
+          "title": "仓库 Apache-2.0 许可",
+          "url": "https://github.com/infiniflow/ragflow/blob/dce85b304377cdca493c66c6de11194b551b7600/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-31/ragflow-pdf-toc-recovery-guard.md"
+    },
+    {
+      "id": "claude-code-headless-failure-boundary-2314",
+      "category": "大模型前沿用法",
+      "title": "Claude Code 2.1.314：脚本调用补齐失败信号与文件写入边界",
+      "finding": "10月30日正式发布：修复 claude -p 启动失败却退出码为0且无输出的问题；新增针对 Write、Edit、NotebookEdit 的工作目录外写入阻断，并修复恢复到 worktree 后沙箱未生效的问题。",
+      "relevance": "增量在代理调度的执行契约：让调用方更容易区分未启动、运行失败与真正产物完成，而不是提高模型智力。适用于代码代理、批量研究和实验脚本的监督执行。",
+      "action": "在隔离样例仓库验证正常调用、启动失败、目录外文件写入和恢复会话四条路径；调用端同时校验退出码、结构化结果和实际产物。新设置仅在获得配置授权后试用，不以关闭权限检查换取自动化。",
+      "caveat": "本次只核查正式发布说明和官方操作文档，未安装运行。新设置的默认值及 Bash/MCP 覆盖未在文档中核实；不能把内置文件工具限制当作全进程沙箱。",
+      "recency_label": "10月30日正式版｜可用性为官方发布，行为未复现",
+      "source_date": "2026-10-30T01:06:26Z（GitHub 正式发布）",
+      "sources": [
+        {
+          "title": "Claude Code v2.1.314 正式发布说明",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.314"
+        },
+        {
+          "title": "非交互调用与输出契约",
+          "url": "https://code.claude.com/docs/en/headless"
+        },
+        {
+          "title": "Bash 沙箱的实际覆盖范围",
+          "url": "https://code.claude.com/docs/en/sandboxing"
+        },
+        {
+          "title": "设置来源与覆盖优先级",
+          "url": "https://code.claude.com/docs/en/settings"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/10/2026-10-31/claude-code-headless-failure-boundary-2314.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "新增1项近期开放补收录，非严格当日首次发布",
+      "verified_at": "2026-10-31T00:06:28.456743+00:00",
+      "coverage": [
+        {
+          "title": "Idol",
+          "status": "HF权重提交10月28日16:04:04Z；GitHub初始提交10月29日20:09:28Z，早于上一期核查。本轮补读官方源码；不把10月30日二手报道日期当作发布日。",
+          "url": "https://github.com/speridlabs/idol-sdk"
+        },
+        {
+          "title": "arXiv cs.GR recent",
+          "status": "本次列表已更新到10月30日；检查包含RGMV、GOFish、HairDeck等标题，未将仅标题浏览包装成全文阅读。",
+          "url": "https://arxiv.org/list/cs.GR/recent"
+        },
+        {
+          "title": "RGMV",
+          "status": "10月28日提交、10月30日列表；已读部分正文，机制是多次法线预测一致性调节ControlNet几何残差。官方仓库只有README、没有训练/推理代码和许可，未纳入已开放项目。",
+          "url": "https://github.com/WISLab-GDUT/RGMV"
+        },
+        {
+          "title": "历史去重",
+          "status": "对照10月9日至30日历史日报，无Idol标题/id；已收录的AudioLift等不重复。",
+          "url": "https://github.com/liqidong/Ai-ad-collect/tree/main/reports/2026/10"
+        }
+      ],
+      "limits": "非穷尽所有数字人仓库；未确认本轮有新开放的表情驱动头像或高精度人脸Gaussian-to-Mesh方案。"
+    },
+    {
+      "category": "知识库 / RAG、采集 / 工具",
+      "status": "新增1项PDF预处理回归修复；采集/工具无新增重点条目",
+      "verified_at": "2026-10-31T00:05:48.220Z",
+      "coverage": [
+        {
+          "title": "RAGFlow PDF目录恢复回归",
+          "url": "https://github.com/infiniflow/ragflow/pull/21768",
+          "status": "已合并，选入；与上期同步水位修复不同。rc3标签早于补丁，区分主分支可用与发布包可用。"
+        },
+        {
+          "title": "Crawl4AI近期主分支提交",
+          "url": "https://github.com/unclecode/crawl4ai/commits/main/",
+          "status": "最新提交仍为10月26日文档链接维护；未发现本窗口新增采集能力。"
+        },
+        {
+          "title": "MarkItDown近期主分支提交",
+          "url": "https://github.com/microsoft/markitdown/commits/main/",
+          "status": "最新仍为10月22日DocIntel结构化输出，历史已收录，不重复。"
+        }
+      ],
+      "limits": "检查官方近期提交、PR及发布元数据；非穷尽全部RAG或采集项目。未把搜索引擎抓取日期或Topics更新时间当发布日期。"
+    },
+    {
+      "category": "大模型前沿用法 / 智能体应用",
+      "status": "新增1项 Claude Code 2.1.314 正式版工程增量。",
+      "verified_at": "2026-10-31T00:04:24Z",
+      "sources": [
+        {
+          "title": "Claude Code releases",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "Claude Platform release notes",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Codex releases",
+          "url": "https://github.com/openai/codex/releases"
+        },
+        {
+          "title": "OpenAI API changelog",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        }
+      ],
+      "limits": "Claude Code v2.1.314 为10月30日01:06:26Z正式发布，晚于前期核查。Claude平台10月30日新增Opus 4.8 fast mode弃用公告，11月30日移除，属于迁移维护而非新能力，未扩成第二篇。10月29日成本分析API已在上期收录。Codex正式release读取仍为0.166.0，不把旧更新再当今日发布。OpenAI API changelog本轮未发现10月30日新条目。检索覆盖有限，不代表全领域无进展。"
+    }
+  ]
+}
