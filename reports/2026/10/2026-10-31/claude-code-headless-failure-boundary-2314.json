@@ -1,0 +1,97 @@
+{
+  "id": "claude-code-headless-failure-boundary-2314",
+  "title": "Claude Code 2.1.314：把脚本退出状态、文件边界和业务验收分开",
+  "problem": "把代码代理放进自动化链路后，调度器必须判断它到底有没有启动、是否真的完成任务、改动是否留在授权目录。终端进程正常退出并不天然等于代码正确：输出可能为空，也可能有文字结论而没有目标文件。这次更新补的是运行时信号和内置文件工具边界；不是新训练算法，也不是模型效果提升。",
+  "inputs": "输入仍是已有的 claude -p 非交互接口：任务提示、工作目录、经授权的工具权限和配置，以及可选的会话恢复标识。它不是本次新发明的调用方式。运行前需要已有可用的 Claude Code 账户或受支持提供商认证；本文没有执行认证、安装、升级或模型调用。",
+  "outputs": "输出包括进程退出状态、标准输出/错误输出、可选 JSON 或流式结构化结果，以及实际文件变更。新版本说明确认一种启动失败会打印错误并退出1，修复此前退出0且无输出的情况。调用方仍需独立检验业务产物，不能只把退出码0当作测试通过。",
+  "pipeline": [
+    {
+      "title": "1. 固定版本与输入边界",
+      "explanation": "输入一个不含私人数据的样例仓库和任务。先记录 claude --version、启动目录及启用的工具；输出可审计的运行记录。官方提供指定版本安装方式，但此处只提出验收方案，没有执行安装。若团队走 stable 更新通道，不能仅凭最新发布推定机器已升级。"
+    },
+    {
+      "title": "2. 显式载入配置",
+      "explanation": "用 --settings 向测试会话传入 JSON 或配置文件，并确认配置来源。可研究 permissions.blockWritesOutsideWorkingDirectories 设置，但其精确默认行为尚未在本轮读取的设置参考中找到。项目配置、个人配置和组织管理配置存在优先级，测试结果必须连同实际配置一起记录。"
+    },
+    {
+      "title": "3. 运行并保留完整终态",
+      "explanation": "通过 claude -p 执行一个小任务，分别保存 stdout、stderr 与退出码。官方 headless 指南区分成功和失败状态，并支持结构化输出。建议调用层先做协议校验，结果为空、无法解析或声明失败时不要进入下一训练/提交阶段。此处后半段是工程建议，不是官方新增功能。"
+    },
+    {
+      "title": "4. 把文件工具和 shell 分开验收",
+      "explanation": "使用测试目录内、外各一个可丢弃文件，验证内置文件工具是否按边界拒绝；另测 shell 沙箱。官方文档说明 shell 沙箱覆盖 shell 命令及其进程，内置文件工具、MCP 服务器和 hooks 不在这层内。不能用某一条测试通过代替其他工具的边界验收。"
+    },
+    {
+      "title": "5. 恢复会话后重跑验收",
+      "explanation": "建立专用 worktree 测试会话，恢复后检查真实工作目录、沙箱状态和产物位置。版本说明报告了这一恢复路径的修复，但没有给出本任务环境的运行结果。最终只把通过独立文件检查和测试命令的产物交给下一阶段；失败时保留错误证据而非无限重试。"
+    }
+  ],
+  "mechanism": "可以把链路拆为三层：调用契约层回答进程怎样结束；工具权限层回答一次内置文件操作是否允许；OS 沙箱层限制 shell 进程可访问的资源。2.1.314 同时调整了前两层并修复一个恢复路径，不能将它们合称为无条件安全的自主执行。既有设置文档允许单次会话配置，适合小范围回归；组织管理策略仍高于会话设置。新 guard 的底层实现和全部路径语义未公开核验，因此仅采用官方声明的工具集合。",
+  "results": [
+    {
+      "claim": "正式版新增三个内置文件工具的工作目录外写入阻断。",
+      "evidence": "发布说明列出 permissions.blockWritesOutsideWorkingDirectories，并限定 Write、Edit、NotebookEdit，称其对所有 permission mode 生效。没有发布命中率、性能或安全测试表。",
+      "source": "https://github.com/anthropics/claude-code/releases/tag/v2.1.314"
+    },
+    {
+      "claim": "非交互启动失败不再静默伪装为成功。",
+      "evidence": "官方报告修复退出0且无输出的启动失败路径；同版还修复 -p --resume / --continue 进入 worktree 后沙箱未应用的问题。本次没有复现实验。",
+      "source": "https://github.com/anthropics/claude-code/releases/tag/v2.1.314"
+    },
+    {
+      "claim": "OS shell 沙箱和内置工具权限不是同一边界。",
+      "evidence": "官方 sandboxing 文档明确将内置文件工具、MCP 与 hooks 排除在 shell 沙箱外；这是已有机制解释，不是把旧功能当成新发布。",
+      "source": "https://code.claude.com/docs/en/sandboxing#what-runs-outside-the-sandbox"
+    }
+  ],
+  "limitations": [
+    "证据是官方发布说明和文档，不是源代码实现审计、社区复现或本机实测。不能据此声称消除了所有权限绕过或启动失败。",
+    "开放状态：GitHub 已有正式 release 与安装渠道；本文核查的是可获取的产品版本和公开文档，不是可自行编译的完整 Claude Code 实现。未核实新 guard 的实现源码或内部测试，不能把公开变更日志等同于核心源码开源。",
+    "本轮设置参考与权限页未检索到新 guard 的完整条目，默认值、符号链接细节及其他工具路径的兼容性仍未知。不要自行推断 Bash、MCP 或 hooks 也被它覆盖。",
+    "退出码与业务成功不同：生成的代码可能编译失败、测试不足或遗漏文件，仍需任务级验收。",
+    "文档中的 bare 模式会改变配置发现和认证来源，不能不加说明地拿它替换既有订阅登录调用。",
+    "正式发布不保证每个更新通道已经分发；部署前记录版本和平台。没有报告模型准确率、速度或成本收益。"
+  ],
+  "engineering_notes": [
+    "最小试用建议：在临时仓库准备一个读取 README 的成功任务和一个可控配置/启动错误任务，确认两条路径的退出状态与输出都被调度器正确处理；不要使用真实密钥制造失败样例。",
+    "再增加两个授权范围内的回归样例：工作目录外的可丢弃文件写入，以及恢复 worktree 后的边界测试。只在隔离环境操作，不访问真实敏感目录。",
+    "调度状态可明确分为启动失败、运行失败、产物待验收和验收通过。它是本文建议的工程约定，不是 Claude 新增状态字段。",
+    "对长实验任务，保留任务ID、输入版本、输出路径和校验结果，比只保存代理最后一句“完成”更可靠。此改造没有证实会提升模型自身能力。",
+    "本期没有把 idle compaction、成本分析 API 或其他旧功能合并包装为新代理框架；只选择与非交互可靠性直接有关的增量。"
+  ],
+  "sources": [
+    {
+      "title": "v2.1.314 发布说明",
+      "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.314"
+    },
+    {
+      "title": "GitHub 版本时间与正式版元数据",
+      "url": "https://api.github.com/repos/anthropics/claude-code/releases/tags/v2.1.314"
+    },
+    {
+      "title": "非交互运行：输出、认证与 bare 模式",
+      "url": "https://code.claude.com/docs/en/headless"
+    },
+    {
+      "title": "配置来源与单次会话设置",
+      "url": "https://code.claude.com/docs/en/settings"
+    },
+    {
+      "title": "Shell 沙箱覆盖范围",
+      "url": "https://code.claude.com/docs/en/sandboxing"
+    },
+    {
+      "title": "CLI 命令与结构化输出选项",
+      "url": "https://code.claude.com/docs/en/cli-reference"
+    },
+    {
+      "title": "版本管理与发布通道",
+      "url": "https://code.claude.com/docs/en/setup"
+    },
+    {
+      "title": "设置参考（本轮未找到新 guard 完整条目）",
+      "url": "https://code.claude.com/docs/en/settings-reference"
+    }
+  ],
+  "read_scope": "阅读 v2.1.314 完整发布说明及官方 headless、settings、sandboxing、CLI reference、setup 的相关章节；核对 GitHub published_at=2026-10-30T01:06:26Z、prerelease=false。读取本地已验证的10月9日至29日历史标题与30日报告去重。没有把文档阅读称为源代码审计，没有运行 Claude Code 或任何付费模型调用。"
+}
