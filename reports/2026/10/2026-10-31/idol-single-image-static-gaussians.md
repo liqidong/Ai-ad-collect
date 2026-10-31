@@ -1,0 +1,96 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-10-31
+---
+
+# Idol：单图直接生成可导出静态高斯，代码与权重已开放
+
+来源日期：权重提交2026-10-28T16:04:04Z；SDK提交2026-10-29T20:09:28Z；独立论文未确认
+
+核查时间：2026-10-31T00:06:51Z
+
+状态：近期开放补收录｜非10月30日后首次发布
+
+## 核心问题
+
+单张图片只观察到物体的一面。传统逐场景高斯优化需要多视图监督；单图生成方案则需要从先验补齐不可见区域。Idol给出一条直接在三维潜空间采样并解码高斯的推理路径，省去用户自行组织多相机图像的步骤。它解决的是静态单物体初始化，不是可驱动人体重建，也没有保证补出的背面符合真实物体。
+
+## 训练与推理输入
+
+推理输入为单物体照片、渲染图或生成图，可使用已有alpha；另有seed、采样步数、引导强度、时间重参数和输出点数。默认50步、CFG参数3.0、time shift 3.0、262144个高斯。训练集组成、训练输入输出配对、损失和训练流程在本次官方SDK/模型卡中未披露，不能从推理代码反推成已知事实。
+
+## 输出与资产形式
+
+标准3DGS .ply、实际送入编码器的1024×1024预处理图、预测输入相机JSON。相机包含yaw/pitch、radius和fov。内存Gaussian有位置、SH0颜色、尺度、单位四元数和不透明度；没有网格拓扑、UV纹理、SMPL-X/FLAME参数、骨骼或表情控制。公开推荐点数范围32768–1048576，按32的倍数设置。
+
+## 分步流程
+
+### 1. 去背景、裁切并规范输入
+
+若输入没有真实alpha，BiRefNet产生前景；alpha经小范围腐蚀减少背景边缘，按前景包围盒裁成方形并缩放到1024。synthetic使用1.2倍包围盒，real使用1.7倍，最终合成到黑底。两模式只改裁切，不是两套模型。输出是预处理RGB。
+
+### 2. 两路图像条件编码
+
+相同RGB送入DINOv3 ViT-H+得到归一化视觉token，送入FLUX.2 VAE得到采样latent并重排/归一化为空间token。条件以feature1和feature2分别保留，给三维生成器提供图像信息。只用FLUX.2的VAE，不是在执行FLUX图像生成。
+
+### 3. 联合采样物体潜变量与相机
+
+初始化物体latent噪声和相机噪声；370.6M DiT在图像条件下预测flow速度，Euler从t=1积到t=0。引导组合在代码中为(1+w)×有条件速度−w×无条件速度，不能直接套其他库对CFG=3的定义。GPU优化把两个分支合批并编译去噪器；输出三维latent与相机编码。
+
+### 4. 八叉树分配有限锚点
+
+50.8M八叉树解码器读取latent，从根单元逐级预测八个子单元的概率并分配锚点数量，仅继续有分配的子单元。叶内随机放置锚点，默认8192个。此处决定空间分布，并非从深度图做三角化。
+
+### 5. 每锚点展开32个高斯
+
+237.3M Gaussian解码器以锚点位置查询latent，预测32个高斯的局部偏移、颜色、尺度、旋转和透明度。带限偏移、softplus尺度、sigmoid透明度及四元数归一化构成最终属性。目标点数主要改变锚点采样和解码预算，更多点并不自动使未知背面更准确。
+
+### 6. 写出与接入
+
+内存对象为z-up、归一化立方体；save_ply旋转到y-up，并将尺度和不透明度转换成标准PLY的log/logit存储。标准查看器可读，但接现有渲染链时必须区分内存已激活属性与PLY原始参数，避免再次激活或重复轴转换。
+
+## 关键机制
+
+可复用的核心是“图像条件→固定长度三维latent→概率八叉树锚点→每锚点32高斯”的分层生成表示。双图像编码器与相机联合采样是源码可见机制；约0.66B只包含DiT和两个解码器，完整请求还包括去背景及图像编码器，作者合计约1.80B。推理SDK已开放并提供自定义输入入口，权重仓库列有config、denoiser、decoder、decoder_gs和birefnet；未下载大权重或执行推理，因此文件存在不等于端到端复现。
+
+## 来源事实与报告效果
+
+- 作者无编号Benchmark表：输入视图及七个新视图质量比较：1×H100，Idol 50步/262144高斯：PSNR↑12.25、SSIM↑0.726、LPIPS↓0.213、IoU↑0.862；TripoSplat为11.76/0.712/0.225/0.860，TRELLIS为11.89/0.716/0.235/0.845。新视图DINOv2↑0.781、CLIP↑0.885、sharpness distance↓0.81。LGM PSNR更高12.46且耗时更低1.1秒，因此不能称全指标领先。数据集名称、数量与基准脚本未在所读发布材料中交代。 [原始证据](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/README.md#benchmark)
+- 作者无编号Across GPUs表：消费级卡推理时间：同一代码/50步/262144高斯，8张图中位数：RTX4090 19.1秒、RTX3080 46.2秒、H100 6.7秒、B300 3.4秒；首张会额外编译。README开头“under 2 seconds”与这套表格不对应，不能拿作默认设置指标。 [原始证据](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/README.md#across-gpus)
+- 作者组件表：内存门槛：全请求模型权重占约3.7–4.4GB，峰值7.2GB；DINOv3改FP32作者称额外1.7GB。这是发布方报告，不是本轮实测，也不是所有分辨率/点数/软件环境的硬保证。 [原始证据](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/README.md#more-details-about-the-model)
+
+## 限制与未知
+
+- 没有单独研究论文、完整训练流程和数据清单的已核实入口；本次是发布材料及推理源码深读，不是论文全文研读。
+- 质量表缺数据集与样本规模，不能证明在人脸、固定人物身份、动漫多表情或几何尺寸上优于专用模型。
+- 输出静态SH0高斯，没有表情控制、绑定或Mesh导出；把其作为可驱动头像仍需新算法和监督，不能直接替换已有驱动模型。
+- 单图背面由先验猜测，相机也为预测值；渲染多视图是同一生成资产的自洽观测，不应当作独立真实几何证据。
+- Idol代码和权重标为Apache-2.0；实际加载两个需访问许可的编码器，FLUX.2-dev页面标为非商业许可。仅下载VAE并不自动免除依赖条款，商用应另核对适用授权。
+- 未运行GPU推理、未验证首次下载/编译成功、未测Mac或CPU性能。代码CPU回退不构成可用速度证明。
+
+## 工程建议，非复现实验
+
+- 最小试验：完成依赖授权后固定SDK提交；用python -m idol.sample --image photo.jpg --mode real --seed 42 --steps 50 --num_gaussians 262144，保留预处理图和相机JSON。对生成图用synthetic。此处仅给步骤，本轮没有安装、登录或上传图片。
+- 先测官方示例，再测有已知侧/背面参考的自有物体；比较输入视图、侧背面结构和渲染稳定性。不要只比较正面PSNR。
+- 可借鉴分层解码和按点数重解码，用作静态道具或初始造型生成。将生成资产渲染作为视频模型条件在工程上可研究，但本SDK没有提供该集成或效果证据。
+- 对人脸Mesh目标，缺少表面和UV约束；对动画目标，缺少身份/表情解耦。建议把它作为静态生成基线，而非承诺替代人脸测量重建或可驱动高斯训练。
+
+## 阅读范围
+
+2026-10-31 UTC核查。完整阅读官方README/HF模型卡、pipeline.py、conditioning.py、preprocess.py、sampler.py、models/decoder.py、gaussian.py及pyproject.toml；读取HF模型元数据/提交历史与GitHub首次提交。独立论文未确认，训练代码未见于已读取仓库树。本次没有下载大模型或运行推理；作者基准与工程判断分开。
+
+## 原始来源
+
+- [官方推理SDK、安装说明与作者基准表](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/README.md)
+- [官方pipeline：输入、双条件编码、联合latent/camera采样](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/pipeline.py)
+- [官方八叉树与Gaussian解码实现](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/models/decoder.py)
+- [官方图像编码与访问检查](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/conditioning.py)
+- [官方Euler flow采样器](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/sampler.py)
+- [官方预处理和裁切模式](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/preprocess.py)
+- [官方Gaussian属性、坐标和PLY写出](https://github.com/speridlabs/idol-sdk/blob/4702a7f00850e34b6e83a2170cc123c3e9570744/idol/gaussian.py)
+- [官方模型文件与模型卡](https://huggingface.co/speridlabs/idol)
+- [官方权重提交历史](https://huggingface.co/speridlabs/idol/commits/main)
+- [官方SDK首次提交](https://github.com/speridlabs/idol-sdk/commit/4702a7f00850e34b6e83a2170cc123c3e9570744)
+- [FLUX.2-dev依赖的许可证](https://huggingface.co/black-forest-labs/FLUX.2-dev/blob/main/LICENSE.md)
