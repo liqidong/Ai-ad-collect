@@ -1,0 +1,79 @@
+{
+  "id": "open-h3-regenerate-2k-open-pipeline",
+  "title": "Open-H3-Regenerate-2K：开放视频草稿再生成管线，但不是几何真值增强器",
+  "problem": "低分辨率生成视频直接插值会保留模糊，而完全重新生成又容易改变内容。此工作将低清草稿作为初始化，再用H3先验恢复高分辨率纹理；解决的是视频再生成，不是可驱动头像建模、网格提取或多视角重建。相对仅能调用闭源Regenerate API的方式，新增可下载模块和自定义输入脚本。",
+  "inputs": "推理输入为文字提示加已有视频或归一化H3潜变量；也可选HyperFlow先生成草稿。infer.py要求三种入口互斥。已有潜变量限定37时间帧；视频预处理到24fps、指定输入画幅并中心裁切，截取/补到121帧再补3帧。训练描述使用高质量片段及8–64倍降采样再放大的退化配对，不是人物驱动参数。",
+  "outputs": "输出RGB视频，可选768p、1080p、2K或4K，以及可选潜变量/计时文件；没有相机、深度、FLAME/SMPL参数、Gaussian、Mesh或RGB贴图输出。固定静音音频条件不意味着保持源音轨或验证口型。",
+  "pipeline": [
+    {
+      "title": "1. 准备与编码草稿",
+      "explanation": "输入提示及获授权短视频；脚本进行定帧率、缩放、中心裁切和定长补帧，再用H3 VAE编码。输出符合固定形状约束的时空潜变量；需先检查裁切是否损失头部或动作。"
+    },
+    {
+      "title": "2. 潜空间放大",
+      "explanation": "3D卷积潜变量上采样器接收低分辨率潜变量，输出目标空间网格的初始潜变量，保留草稿提供的布局；这不是显式3D卷积场景重建。"
+    },
+    {
+      "title": "3. 有限加噪与少步重绘",
+      "explanation": "将放大后的潜变量与噪声混合，冻结H3主体并使用合并适配器进行Euler去噪，默认三步。图像细节由生成先验重新推断，而非从低清输入精确恢复。"
+    },
+    {
+      "title": "4. 解码与质量对照",
+      "explanation": "将最终潜变量交给原始或快速VAE生成RGB帧，再写视频。先以标准路径为参照，比较快速路径造成的细节与时序变化；不得只看锐度决定训练数据是否合格。"
+    }
+  ],
+  "mechanism": "训练采用SoL-Refiner第一阶段的流匹配速度目标，仅训练refiner LoRA，H3主体与VAE冻结；本项目未使用该配方的强化学习奖励微调或单步蒸馏。推理组合refiner、LightX2V Turbo与LMS Sharp适配器。标准分支使用稠密BF16；默认加速分支首步稠密、后续稀疏，最快分支全部稀疏，并配合低精度计算和CUDA图。速度提升包含近似计算，不能称输出等价。",
+  "results": [
+    {
+      "claim": "作者RefinerBench-150结果：整体画质相关指标改善，但并非所有指标提高。",
+      "evidence": "项目页第4节，双方2560×1440、相同输入：VBench六指标平均0.802→0.814；主体一致性0.918→0.924，背景0.950→0.950，平滑度0.984→0.981、动态程度0.765→0.752反而下降；美学0.569→0.604、成像质量0.629→0.676。UniPercept均分53.4→60.0。无独立复现。",
+      "source": "https://nvlabs.github.io/Sana/Open-H3-Regenerate-2K/"
+    },
+    {
+      "claim": "作者盲测偏好87%，不能解释为客观全面领先。",
+      "evidence": "项目页第4节为50案例、20轮每轮10项，共200次判断；不是200名独立受试者。细粒度身份、几何或可驱动性没有据此获证。",
+      "source": "https://nvlabs.github.io/Sana/Open-H3-Regenerate-2K/"
+    },
+    {
+      "claim": "最快路径5秒2K约22.45秒，仅特定大显存GPU暖机测量。",
+      "evidence": "README“Speed of sol_engine_fast”无编号表：单B200/GB200、3次暖机中位数，标准路径87.26秒，最快路径+快速VAE22.45秒。不含草稿生成、模型加载、文字编码和MP4写入；不能将该数字赋予默认sol_engine或端到端冷启动。",
+      "source": "https://github.com/NVlabs/Sana/tree/sol-engine/models/Open-H3-Regenerate-2K#speed-of-sol_engine_fast-on-one-b200-gb200"
+    }
+  ],
+  "limitations": [
+    "发布日期限制：当前已核实权重与脚本实际存在，但未取得论文/代码/权重首次发布的绝对时间。权重提交页仅给相对时间；本条是历史未覆盖的近期补录，不声称当日新增。",
+    "项目演示声称覆盖5–15秒，但当前infer.py检查37潜帧；没有读取到任意时长CLI支持。以实际脚本为准。",
+    "README要求Linux、Python3.11、PyTorch2.11/CUDA13；SoL-Engine含CUDA图约150GB显存。标准分支并未在这里证明能装入24GB显卡。",
+    "生成式重绘可能创造纹理、改变脸部身份/牙齿/口型或时间一致性；不存在由画质分数推出跨视角几何正确的证据。",
+    "模型卡指向MiniMax H3 Community License，包含地区、用途及分发约束，依赖组件另有许可；不能概括成无条件商用或整体Apache开源。",
+    "本次只做文档与代码静态阅读，未下载权重、安装、推理、训练或复现实验。"
+  ],
+  "engineering_notes": [
+    "最小试用（建议，未执行）：按README准备依赖与权重后，在代码目录运行 python infer.py --weights ./weights --input-video draft.mp4 --prompt \"对应内容描述\" --output out.mp4；先用 --fwd standard 作对照，再测试加速模式。此命令不是完整环境安装承诺。",
+    "可复用模块：潜变量上采样、受限加噪的重绘阶段、快慢解码对照。接入成本主要是H3潜变量格式、依赖版本、大显存与许可，而不是简单图片放大接口。",
+    "若用于Gaussian候选训练视频，保留原片与重绘片配对，逐帧检查关键点、轮廓、身份、遮挡和运动；在独立留出视角验证前，不以锐化片替代真实多视角观测。此为工程建议，非作者实验结论。"
+  ],
+  "sources": [
+    {
+      "title": "作者项目页：方法、RefinerBench与用户研究",
+      "url": "https://nvlabs.github.io/Sana/Open-H3-Regenerate-2K/"
+    },
+    {
+      "title": "公开推理代码与README（sol-engine分支）",
+      "url": "https://github.com/NVlabs/Sana/tree/sol-engine/models/Open-H3-Regenerate-2K"
+    },
+    {
+      "title": "官方模型卡与权重",
+      "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K"
+    },
+    {
+      "title": "实际infer.py输入检查",
+      "url": "https://github.com/NVlabs/Sana/blob/sol-engine/models/Open-H3-Regenerate-2K/infer.py"
+    },
+    {
+      "title": "权重添加提交5809c337",
+      "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/commit/5809c33730c18b6b1c827b40974855a4288641b3"
+    }
+  ],
+  "read_scope": "已完整读取官方项目技术页、模型卡、该分支README和infer.py，并检查公开权重目录与权重添加提交。没有全文研读其引用的SoL-Refiner论文；训练机制据本项目作者说明，不冒充原论文细读。数字为作者报告，未独立复现；核查日期2026-11-02（UTC）。"
+}
