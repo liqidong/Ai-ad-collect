@@ -1,0 +1,235 @@
+{
+  "date": "2026-11-03",
+  "title": "AI 工程研究日报",
+  "edition_label": "视频扩散首发代码、长运行部署边界与入库事件",
+  "summary": "本期收录3项经原始来源核查的实质变化：AB-Attention 首次开放代码，降低视频扩散推理成本但不直接改善高斯监督质量；Cloudflare 为长运行 Agent 增加默认部署缓冲窗口，仍须独立处理恢复与副作用；RAGFlow 接入六阶段入库事件，提升可观测性而非检索质量。大模型前沿用法及合规采集工具本轮无新增重点条目。",
+  "notice": "读取11月2日报告，并对照保留的10月9日起共25期历史归档去重。公开研究草稿；来源事实、工程建议和未知分别标注。未训练模型、运行推理或调用付费API。无新增仅指本轮原始来源检索未发现符合收录标准的实质变化，不代表领域没有进展。",
+  "verified_at": "2026-11-03T00:03:13Z",
+  "items": [
+    {
+      "id": "ab-attention-first-code-release",
+      "category": "数字人 / 几何",
+      "title": "AB-Attention 首次开放代码：加速视频扩散采样，不等于改善高斯训练数据质量",
+      "finding": "相对上一期待开放状态，11月2日首个实现提交已开放：通过局部聚类、概率校正和分页执行加速视频扩散前向推理；作者报告三种T2V模型1.84–2.23×端到端加速。",
+      "relevance": "可作为生成式训练数据管线的候选降本模块，但不提供人物身份/姿态控制或证明高斯训练变好。",
+      "action": "仅有Hopper环境时先做固定噪声的稠密/稀疏功能对照；确认目标生成器兼容后，再用下游新动作/新视角指标验收。",
+      "caveat": "Hopper、BF16/head_dim128、只前向；Wan2.2及姿态条件模型未验证；代码未实测。不要把更接近稠密视频等同真实几何更准。",
+      "recency_label": "首次代码开放｜非论文今日首发",
+      "source_date": "论文：2026-10-29；代码：2026-11-02T18:47:34Z（上海11月3日02:47）",
+      "sources": [
+        {
+          "title": "AB-Attention 论文 v1（正文、三张表及附录 A–D）",
+          "url": "https://arxiv.org/html/2610.39663v1"
+        },
+        {
+          "title": "arXiv 提交日期：2026-10-29",
+          "url": "https://arxiv.org/abs/2610.39663"
+        },
+        {
+          "title": "首次代码提交：2026-11-02 18:47:34 UTC",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/commit/75e01af44ba850e4ee62375ead12d901a53cb483"
+        },
+        {
+          "title": "固定提交 README：安装、模型、复现条件",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/README.md"
+        },
+        {
+          "title": "采样计划 API",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/ab_attention/attention.py"
+        },
+        {
+          "title": "视频模型接入与稠密/稀疏调度",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/ab_attention/video.py"
+        },
+        {
+          "title": "FlashInfer 分页执行和输入约束",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/ab_attention/flashinfer_backend.py"
+        },
+        {
+          "title": "自定义提示词/模型目录/初始噪声运行入口",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/generate.py"
+        },
+        {
+          "title": "依赖及 CUDA 编译目标",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/pyproject.toml"
+        },
+        {
+          "title": "MIT 许可",
+          "url": "https://github.com/InfRec-Cardinal/AB-Attention/blob/75e01af44ba850e4ee62375ead12d901a53cb483/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-03/ab-attention-first-code-release.md"
+    },
+    {
+      "id": "cloudflare-durable-agent-deploy-deferral",
+      "category": "智能体 / 应用",
+      "title": "Cloudflare 长运行 Agent 的部署窗口：默认延迟切换，不等于任务不会中断",
+      "finding": "10 月 30 日 Cloudflare 将 Durable Objects 代码更新改为默认 deferred：活跃对象可延迟切换，默认 300 秒。相对过去立即应用更新，这是减少长任务被部署打断的运行时增量；并不保证任务或外部副作用恰好执行一次。",
+      "relevance": "适合持续在线 Agent 的任务状态服务和研究调度控制层；关注部署、恢复和工具副作用，而非只比较模型输出。",
+      "action": "先在隔离测试对象比较 immediate 与 deferred，记录重启、任务回执及重复副作用；无需迁移现有模型或 GPU 执行器。详解提供步骤与验收设计。",
+      "caveat": "官方行为说明，未实测。Pi 文档仍写部署 30 秒，与新平台默认 300 秒存在口径差异；其工具审批也尚不完备。不得宣传生产可靠性已验证。",
+      "recency_label": "近期实质变更｜2026-10-30 发布，本期首次收录",
+      "source_date": "2026-10-30（平台发布及更新文档）；2026-10-29（Pi/Lifecycle 文档）；核查 2026-11-03",
+      "sources": [
+        {
+          "title": "Cloudflare 2026-10-30：Durable Objects deferred code updates",
+          "url": "https://developers.cloudflare.com/changelog/post/2026-10-30-durable-objects-deferred-code-updates/"
+        },
+        {
+          "title": "Durable Objects code updates：策略、连续部署、限制",
+          "url": "https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/"
+        },
+        {
+          "title": "Agents Lifecycle：持久队列与重启边界",
+          "url": "https://developers.cloudflare.com/agents/runtime/lifecycle/"
+        },
+        {
+          "title": "Pi harness：恢复、重放、取消与限制",
+          "url": "https://developers.cloudflare.com/agents/harnesses/pi/"
+        },
+        {
+          "title": "WebSocket Hibernation 官方示例",
+          "url": "https://developers.cloudflare.com/durable-objects/examples/websocket-hibernation-server/"
+        },
+        {
+          "title": "Cloudflare Agents 官方仓库（MIT）",
+          "url": "https://github.com/cloudflare/agents"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-03/cloudflare-durable-agent-deploy-deferral.md"
+    },
+    {
+      "id": "ragflow-ingestion-lifecycle-events",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow：解析链路从日志挂钩升级为六阶段结构化事件",
+      "finding": "来源事实：11 月 2 日合入的 Go 实现，为创建、排队、运行、完成、失败、停止输出统一 JSON 事件；带任务/文档/轮次标识、错误原因和等待/解析耗时。相对上一期只核到日志挂钩，本次是生命周期接线和 OSS 输出实现，不是检索算法或效果提升。",
+      "relevance": "有助于区分知识库入库慢在排队还是解析，关联失败到同一文档的具体重跑轮次；也适合作为 Agent 工具任务可观测性的工程参考。",
+      "action": "工程建议：先在隔离测试部署固定提交，跑一份无敏感信息的小文档，分别验收成功、排队取消、重跑及失败；按 task_id 与 run_count 关联 stdout JSON，不把未发出的事件当作任务未执行。",
+      "caveat": "主分支源码已合入，未核实稳定发行包/镜像已包含；仅阅读代码和测试，未安装运行。发送为 best-effort，非持久事件队列。测试为构造夹具；无召回率、生产吞吐或可靠性提升数字。日志含文件名和用户/租户 ID，须脱敏。",
+      "recency_label": "新合入工程能力；非稳定版发布声明",
+      "source_date": "PR 创建 2026-10-29；提交 2026-11-02T14:30:34Z，合并 14:30:35Z；核查 2026-11-03（Asia/Shanghai）",
+      "sources": [
+        {
+          "title": "RAGFlow 合并提交：文档解析任务结构化生命周期事件",
+          "url": "https://github.com/infiniflow/ragflow/commit/69fc4c9ec6e1b8dcdf582b2f6350c8ce9c674f4d"
+        },
+        {
+          "title": "PR #21711：设计与作者测试说明",
+          "url": "https://github.com/infiniflow/ragflow/pull/21711"
+        },
+        {
+          "title": "事件构建、时间计算与声明的 emitter 契约",
+          "url": "https://github.com/infiniflow/ragflow/blob/69fc4c9ec6e1b8dcdf582b2f6350c8ce9c674f4d/internal/observability/ingestion_log.go"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-03/ragflow-ingestion-lifecycle-events.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "AB-Attention 从上一期待开放进入首次代码公开；跟踪的头像/全身高斯仓库无新增默认分支能力，本轮未发现新的直接生成高质量人体训练数据方案。",
+      "coverage": [
+        {
+          "title": "tobias-kirschstein/flexavatar",
+          "status": "最新提交 2026-07-12T10:49:22Z；相对上一期无新变化。",
+          "url": "https://github.com/tobias-kirschstein/flexavatar/commit/6e009870cad61150163da30b7ee4fedca316d773"
+        },
+        {
+          "title": "felixtaubner/cap4d",
+          "status": "最新提交 2026-03-24T15:25:56Z；相对上一期无新变化。",
+          "url": "https://github.com/felixtaubner/cap4d/commit/1f25e99702ab5c0b38aa5e195fdd6cd963fa528c"
+        },
+        {
+          "title": "initialneil/DEGAS",
+          "status": "最新提交 2026-08-08T12:59:19Z；相对上一期无新变化。",
+          "url": "https://github.com/initialneil/DEGAS/commit/6aa807c7be0e4a938ebc682620d74a76cec7c76d"
+        },
+        {
+          "title": "xibushu/UniForge3D",
+          "status": "最新提交 2026-10-17T09:15:35Z；相对上一期无新变化。",
+          "url": "https://github.com/xibushu/UniForge3D/commit/8b6094780e202b8a6b1d239e0997552e18547026"
+        },
+        {
+          "title": "1231234zhan/webavatar",
+          "status": "最新提交 2026-05-11T16:48:58Z；相对上一期无新变化。",
+          "url": "https://github.com/1231234zhan/webavatar/commit/1dbe0206025b4d7d229e4acb3cf5b20bee9d64cc"
+        },
+        {
+          "title": "yihalem1/FlexiAvatar_Release",
+          "status": "最新提交 2026-09-18T15:23:03Z；相对上一期无新变化。",
+          "url": "https://github.com/yihalem1/FlexiAvatar_Release/commit/88f580b4d495322ffe009784057183e32691a5c2"
+        }
+      ],
+      "limits": "默认分支未变不代表所有分支或权重托管均无变化。没有新训练数据方案，不用旧方法凑数。"
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "收录一项长运行 Agent 部署机制的近期实质更新；既有原型与示例不作为今日新能力。",
+      "coverage": [
+        {
+          "title": "DeepSeek Harness 原型",
+          "status": "公开原型，不等于正式生产产品；本轮未取得可证实新能力变化的证据。",
+          "url": "https://github.com/deepseek-ai/dsh-superagent-prototype"
+        },
+        {
+          "title": "Cloudflare Harnesses",
+          "status": "用于发现不同 harness 的接入方式；Pi 恢复与权限边界作为上下文，而非一律标成新突破。",
+          "url": "https://developers.cloudflare.com/agents/harnesses/"
+        }
+      ],
+      "limits": "范围扩展到运行时、恢复和权限，而不只模型或多代理封装；未运行生产任务。"
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "新增一项入库生命周期可观测性工程能力，不声称检索算法进展。",
+      "sources": [
+        {
+          "title": "RAGFlow 合并提交：文档解析任务结构化生命周期事件",
+          "url": "https://github.com/infiniflow/ragflow/commit/69fc4c9ec6e1b8dcdf582b2f6350c8ce9c674f4d"
+        },
+        {
+          "title": "PR #21711：设计与作者测试说明",
+          "url": "https://github.com/infiniflow/ragflow/pull/21711"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "MarkItDown 默认分支最新仍为 2026-10-22 已报道的 Document Intelligence 扩展，无新增重点条目。",
+      "sources": [
+        {
+          "title": "MarkItDown 最近提交",
+          "url": "https://github.com/microsoft/markitdown/commit/7482c092d9c0074a89803c9fdb63a969e7fe17fc"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "本轮无新增已核实的 GPT/Claude 使用机制。已覆盖的版本不重复；自主 Agent 基础设施实质更新另列智能体 / 应用。",
+      "coverage": [
+        {
+          "title": "Claude Code",
+          "status": "官方最新正式版本仍为 v2.1.316；子代理 effort 已于11月1日收录，不重复。",
+          "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.316"
+        },
+        {
+          "title": "OpenAI Python",
+          "status": "官方最新仍为 v3.42.1，认证与连接维护已于11月2日收录。",
+          "url": "https://github.com/openai/openai-python/releases/tag/v3.42.1"
+        },
+        {
+          "title": "Codex CLI",
+          "status": "最新预发布仍为0.167.0-alpha.3，通用发布说明未提供足以确证新增机制的内容。",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.167.0-alpha.3"
+        },
+        {
+          "title": "Anthropic 官方新闻与工程栏目",
+          "status": "核对页面具体文章日期，未把页首 November 2 当成旧文章的新发布日期；未发现符合本轮门槛的新使用机制。",
+          "url": "https://www.anthropic.com/engineering"
+        }
+      ],
+      "limits": "使用官方仓库 releases API 核查版本与发布时间；未运行这些版本。"
+    }
+  ]
+}
