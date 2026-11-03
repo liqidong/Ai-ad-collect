@@ -1,0 +1,88 @@
+{
+  "id": "cloudflare-durable-agent-deploy-deferral",
+  "title": "Cloudflare 长运行 Agent 的部署窗口：默认延迟切换，不等于任务不会中断",
+  "problem": "持续在线 Agent 的失败不只来自模型：部署新代码也可能打断工具调用、断开连接，让调用方不知道副作用是否完成。过去 Durable Objects 更新会立即应用；2026-10-30 的真实增量是默认给活跃对象一个切换缓冲窗口，而不是新增一个更聪明的模型或保证任务成功。本篇是原始发布说明与运行时文档解读，不是论文实验。",
+  "inputs": "无需训练。运行输入是已部署 Worker 的新版本、活跃或休眠的 Durable Object、代码更新策略，以及该对象正在处理的请求/工具任务。若接 Pi，则另有持久化的会话、任务与模型凭据；模型调用仍由所选提供商执行。",
+  "outputs": "输出是对象继续使用旧代码、休眠后在下次请求采用新代码，或达到期限后重置采用新代码。业务产物仍由 Agent 自己生成；此机制不生成模型权重、不修复错误答案，也不自动证明外部写操作只执行一次。",
+  "pipeline": [
+    {
+      "title": "1. 先登记业务状态，而不是只保留一个 Promise",
+      "explanation": "【工程建议】输入任务 ID 和允许的工具集合，将阶段、输入哈希、外部副作用幂等键写入持久存储，输出可查询任务记录。把“已接收”“运行中”“完成/失败”分开，才能在部署后核对实际进展。"
+    },
+    {
+      "title": "2. 提交新代码，运行时按对象状态决定切换",
+      "explanation": "【来源事实】部署时活跃对象可暂时继续跑旧代码；若先休眠，下次请求使用新版本；若一直活跃到延迟上限，则重置切换。新行为给正在执行的工作留时间，不是无限等待任务完成。"
+    },
+    {
+      "title": "3. 重启后恢复的是记录，不是任意 JavaScript 栈",
+      "explanation": "【来源事实】Agents Lifecycle 将待办 job 存在 SQLite，以 alarm 唤醒并重新启动能力模块；具体 harness 读取保存状态决定继续方式。它不自动保存任意函数的执行位置。输出应是重建后的任务状态而不是假定原调用仍活着。"
+    },
+    {
+      "title": "4. 明确工具是否允许重放",
+      "explanation": "【来源事实】Pi 对标成 replay:safe 的中断工具允许再次执行，其他工具返回中断结果交模型处理；【工程建议】“提交训练作业”“发通知”“扣费”等必须先查外部回执或使用幂等键。读操作可重放不代表整条工作流恰好一次。"
+    },
+    {
+      "title": "5. 重连观察端并验收结果",
+      "explanation": "【来源事实】WebSocket Hibernation 示例使用 acceptWebSocket 和序列化附件在对象重建后恢复连接相关状态，且仅支持对象作服务器的 WebSocket。研究面板应重新查询任务记录；【工程建议】不要把连接仍在等同于任务已完成。"
+    }
+  ],
+  "mechanism": "把三层分清：代码更新策略只控制何时换运行版本；Lifecycle 负责持久 job 与唤醒；harness 决定如何重开会话和重试工具。三者都不能代替业务幂等、权限检查和结果验收。延迟策略是缓解部署打断的运行时能力，可与现有 Agent 编排组合，不要求采用 Router/Worker 架构。",
+  "results": [
+    {
+      "claim": "已发布的平台行为变化，而非受邀演示。",
+      "evidence": "10 月 30 日官方 changelog 公布默认 deferred，默认 300 秒，配置范围 0–86400 秒；明确 best effort。数字是配置契约，不是任务成功率实验。",
+      "source": "https://developers.cloudflare.com/changelog/post/2026-10-30-durable-objects-deferred-code-updates/"
+    },
+    {
+      "claim": "延迟部署可能跳过中间版本。",
+      "evidence": "部署文档 How it works 示例：A 的 30 秒计时与 10 秒后 B 的 60 秒计时并存；较早计时到期时采用最新 B。需要版本间兼容，不能依赖每个版本必然运行一次。",
+      "source": "https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/#how-it-works"
+    },
+    {
+      "claim": "没有可据以声称编码质量或生产效率提高的量化评测。",
+      "evidence": "本次研读的发布说明没有数据集、对照组、任务成功率或实验表；未实测吞吐、token 费用、重复副作用或恢复正确性。",
+      "source": "https://developers.cloudflare.com/changelog/post/2026-10-30-durable-objects-deferred-code-updates/"
+    }
+  ],
+  "limitations": [
+    "【文档不一致】10 月 30 日平台更新文档写默认 300 秒；核查时 Pi Recovery 页面仍写部署给 in-flight 工作 30 秒。两者不能自行当作同一个保证或擅自解释成相加；以具体部署配置和实测为准。",
+    "【来源事实】延迟为 best effort，不能阻止平台运行时更新等原因导致的提前重启。旧版本和新版本可能并存，协议/存储变更仍须兼容。",
+    "【来源事实】Pi Durable 标注 experimental；工具尚无内建审批/权限步骤，忽略 abort signal 的工具会阻塞取消完成。不能将其直接当作有完善审批的生产自主系统。",
+    "【未知】本次未执行部署，也未审计完整源码；没有独立复现或生产故障率证据。未确认支持该 CLI 参数的最低 Wrangler 版本，试验前须检查已安装版本的帮助/配置校验。",
+    "【开放范围】Durable Objects 是托管平台能力，需要 Cloudflare 账户和相应资源/计费；Agents SDK 官方仓库为 MIT，不代表托管服务免费，亦不代表 Pi 依赖许可等同于 SDK。"
+  ],
+  "engineering_notes": [
+    "【最小试用，未执行】在隔离测试 Worker 建一个 SQLite-backed Durable Object，加入 version 字段和带唯一 operationId 的只读长任务。先部署 V1 并触发任务，再以 durable_objects.code_update_strategy={mode:\"deferred\",max_delay:60} 部署 V2，记录对象版本、开始/结束/重置时点。不要对现有生产站点做此实验。",
+    "【对照验收】同一测试分别用 immediate、deferred 60 秒；另加短任务可休眠、超过期限长任务、连续部署三组。检查恢复正确性、重试次数、重复副作用数、用户可见中断时间；这些是建议指标，不是作者已测数字。",
+    "【安全与幂等】先用不会写外部系统的工具；下一阶段才引入受控幂等写，模拟“外部成功但本地未记账”后重启。工具凭据置于执行边界，用户文本或网页不得授予权限；涉及发布/删除/费用的动作需要显式审批。",
+    "【集成代价】已使用 Durable Objects 的服务可先核对部署策略，未必需要换 harness；已有本地/远程 GPU 作业则保留原执行环境，只把任务状态和调度放控制层，避免把 GPU 训练搬进 Worker。",
+    "【可观测性】部署 API 的策略字段是 write-only，不可只凭 GET 回执推断策略；保存不含秘密的发布配置、版本 ID 与任务事件日志。取消等待、取消工具与撤销已完成副作用必须分别验收。"
+  ],
+  "sources": [
+    {
+      "title": "Cloudflare 2026-10-30：Durable Objects deferred code updates",
+      "url": "https://developers.cloudflare.com/changelog/post/2026-10-30-durable-objects-deferred-code-updates/"
+    },
+    {
+      "title": "Durable Objects code updates：策略、连续部署、限制",
+      "url": "https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/"
+    },
+    {
+      "title": "Agents Lifecycle：持久队列与重启边界",
+      "url": "https://developers.cloudflare.com/agents/runtime/lifecycle/"
+    },
+    {
+      "title": "Pi harness：恢复、重放、取消与限制",
+      "url": "https://developers.cloudflare.com/agents/harnesses/pi/"
+    },
+    {
+      "title": "WebSocket Hibernation 官方示例",
+      "url": "https://developers.cloudflare.com/durable-objects/examples/websocket-hibernation-server/"
+    },
+    {
+      "title": "Cloudflare Agents 官方仓库（MIT）",
+      "url": "https://github.com/cloudflare/agents"
+    }
+  ],
+  "read_scope": "完整阅读 2026-10-30 官方 changelog 与 Durable Objects code updates 正文（含连续部署、配置、REST、渐进部署和限制），并阅读 Lifecycle 的启动/队列/恢复边界、Pi 的安装/提交/恢复/限制、WebSocket Hibernation 示例及 Agents 仓库 README/许可标识。未读为论文，未运行部署或训练，未审计整个 SDK。核查：2026-11-03 08:00 Asia/Shanghai；Pi/Lifecycle 页面标注更新 2026-10-29，WebSocket 示例 2026-10-12；具体平台变化发布 2026-10-30。"
+}
