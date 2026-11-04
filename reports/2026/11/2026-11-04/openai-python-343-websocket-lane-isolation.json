@@ -1,0 +1,88 @@
+{
+  "id": "openai-python-343-websocket-lane-isolation",
+  "title": "OpenAI Python 3.43：隔离慢消费流，避免一个积压通道关闭整条 WebSocket",
+  "problem": "一条 WebSocket 承载多个响应时，某个客户端消费者来不及读取，队列会持续增长。旧的受管 session 在任一队列达到预算后关闭整条连接，其他正在正常消费的通道也受影响。v3.43.0把“全连接失败”与“仅失败积压通道”变成显式可选策略；这不同于已报道的认证预检、重连及 compaction。",
+  "inputs": "已有 client.responses.connect() 连接、ResponsesWebSocketLimits 应用预算、按 stream_id 注册的通道与实际到达的服务器事件。新增输入是同步和异步 session 构造器中的 isolate_lane_overflow=True；默认 False。",
+  "outputs": "健康通道继续收到事件和终态 Response；被隔离通道进入持续错误状态，recv 与 get_final_response 抛出同一个首发 ResponsesWebSocketBufferError。不是补全丢失回答，也不代替工具执行器。",
+  "pipeline": [
+    {
+      "title": "1. 建立明确的读取所有权",
+      "explanation": "【来源事实】同步 ResponsesWebSocketSession 或异步 AsyncResponsesWebSocketSession 接管连接的读取与生命周期。先注册命名 lane，每个 lane 配一个消费者，通过 lane.send/recv 操作；不要同时直接从底层连接接收。默认 lane 也需消费，否则控制事件积压。"
+    },
+    {
+      "title": "2. 显式选择隔离和预算",
+      "explanation": "【来源事实】构造 session 时传 limits 及 isolate_lane_overflow=True。预算分别限制每 lane 与总队列的事件数/原始消息字节，以及 lane 数量；这是应用预算，不是服务端协议额度，也不等于进程内存上限。"
+    },
+    {
+      "title": "3. 根据压力来源选择失败通道",
+      "explanation": "【代码事实】单通道超限或单事件大于总字节预算时失败目标 lane。总量压力下优先按字节、否则按事件数寻找最大已有积压；排除本次新事件，平局按注册顺序。失败后清空队列与累积器，并唤醒等待者。"
+    },
+    {
+      "title": "4. 分开处理健康结果和失败记录",
+      "explanation": "【代码事实】失败 ID 的后续事件被丢弃，不转发默认 lane；其 ID 直到物理重连前保持占用。健康 lane 可继续，失败 lane 即使先前已有缓存终态也不再返回旧结果冒充成功。手动关闭 lane 的既有默认通道回退行为与溢出失败不同。"
+    },
+    {
+      "title": "5. 到完成边界再决定恢复",
+      "explanation": "【来源事实】物理连接故障和主动关闭仍结束整个 session；重连释放已关闭 ID，但不恢复服务端响应缓存、不重放不确定发送。默认 lane 若已失败，重连后须显式 session.lane() 重建。【工程建议】保留任务/工具回执，先核对已完成副作用，再恢复业务上下文。"
+    }
+  ],
+  "mechanism": "这是客户端路由器的故障隔离，不是服务端调度优先级，也不是无限缓冲。隔离用局部数据损失换取其他通道继续工作的机会。仍需观察 default lane 的可用性并记录丢失事件的事实；不能把健康 socket 等同于所有任务都健康。",
+  "results": [
+    {
+      "claim": "已进入正式版本，默认行为兼容旧调用。",
+      "evidence": "releases API 确认 v3.43.0 published_at=2026-11-03T18:05:44Z、prerelease=false；固定标签代码中两种构造器的参数默认值均为 False。",
+      "source": "https://github.com/openai/openai-python/releases/tag/v3.43.0"
+    },
+    {
+      "claim": "官方提供了可离线复核的功能契约，而不是模型性能跑分。",
+      "evidence": "固定版本测试使用本地脚本 WebSocket 服务器，覆盖四种队列预算、同步/异步、积压平局、超大事件、默认通道失效、物理断线、重连释放及旧终态失效。PR作者报告200个session用例通过；本报告只读测试，没有运行。",
+      "source": "https://github.com/openai/openai-python/blob/v3.43.0/tests/lib/responses/test_websocket_session_overflow.py"
+    },
+    {
+      "claim": "没有吞吐、延迟、费用或生产故障率提升证据。",
+      "evidence": "发布说明与所读测试只支持接口行为与局部隔离的判断；不能据此声称多Agent任务成功率提高。",
+      "source": "https://github.com/openai/openai-python/pull/4225"
+    }
+  ],
+  "limitations": [
+    "【数据损失】被隔离 lane 的排队事件、累积结果、后续事件不可再读取；无法保证无损或恰好一次执行。",
+    "【控制面盲区】默认 lane 也会失败，之后默认/API错误与控制事件不可见，虽然命名 lane 仍可能工作。必须给观察通道配置预算并单独告警。",
+    "【内存边界】字节计数是收到的消息字节，不含 Python 对象开销；响应累积默认无上限，须另行考虑 max_response_bytes。底层 WebSocket 单消息上限独立，增加 session 预算不会同步改变它。",
+    "【可用范围】Python SDK 的公开同步/异步 helper 已发布；使用 WebSocket 需 realtime 依赖。此变更不证明所有账户、模型或地区具有相同服务器能力，生产使用仍需核对具体 API 权限和计费。",
+    "【许可】固定版本 SDK 为 Apache-2.0；这不是模型权重许可，不授予免费API额度，也不代替服务条款。",
+    "【未知】未安装SDK、运行回归或调用付费API；未测长期连接、真实慢前端、吞吐或跨版本迁移。"
+  ],
+  "engineering_notes": [
+    "【最小试用，未执行】在隔离环境准备 v3.43.0及官方测试依赖，用 tests/lib/responses/test_websocket_session_overflow.py 的本地脚本服务，不使用真实密钥；创建 slow、healthy 两个 lane，将 max_events_per_lane 设为1，连续向 slow 发两个事件，再向 healthy 发终态。分别以 False 与 True 建立 session。",
+    "【验收】False应出现连接级失败；True应获得 healthy 终态，slow 的 recv/get_final_response持续报同一错误。再测试 default 溢出后控制事件丢失、已缓存终态失效、重连前无法复用 ID、重连后可显式重建。验收结果应保存为测试日志，不把作者的测试通过当作本地结果。",
+    "【集成建议】仅在接受局部流丢失且具备恢复记录时开启。对不可丢失的关键回执另存业务状态，不能仅放在UI事件队列；恢复时核对外部副作用，避免盲目重发工具调用。",
+    "【同版本次要增量】v3.43.0另扩展进度累积与Live Responses委派类型。本条只精读并收录溢出隔离，不把公开类型存在等同于所有后端工具已开放。"
+  ],
+  "sources": [
+    {
+      "title": "OpenAI Python v3.43.0 正式发布",
+      "url": "https://github.com/openai/openai-python/releases/tag/v3.43.0"
+    },
+    {
+      "title": "固定版本 WebSocket session 使用文档",
+      "url": "https://github.com/openai/openai-python/blob/v3.43.0/src/openai/lib/responses_websocket/README.md"
+    },
+    {
+      "title": "固定版本路由与隔离实现",
+      "url": "https://github.com/openai/openai-python/blob/v3.43.0/src/openai/lib/responses_websocket/_session.py"
+    },
+    {
+      "title": "同步/异步离线溢出回归测试",
+      "url": "https://github.com/openai/openai-python/blob/v3.43.0/tests/lib/responses/test_websocket_session_overflow.py"
+    },
+    {
+      "title": "PR 4225：行为变化及作者测试报告",
+      "url": "https://github.com/openai/openai-python/pull/4225"
+    },
+    {
+      "title": "固定版本 Apache-2.0 许可",
+      "url": "https://github.com/openai/openai-python/blob/v3.43.0/LICENSE"
+    }
+  ],
+  "read_scope": "完整阅读固定v3.43.0的WebSocket helper README、全部溢出测试文件、_session.py路由失败/清理/分发逻辑与同步异步构造器及终态错误检查，读取正式release元数据、PR说明和LICENSE。未审计整个SDK，未运行代码。核查于2026-11-04 00:07 UTC。"
+}
