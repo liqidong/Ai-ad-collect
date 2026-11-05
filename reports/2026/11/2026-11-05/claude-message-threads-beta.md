@@ -1,0 +1,61 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-05
+---
+
+# Claude Message Threads：服务端暂存会话以减少重复上传，但不是长期记忆
+
+核查时间：2026-11-05T00:03:27Z
+
+## 核心问题
+多轮工具调用反复传送、验证和重新处理历史上下文，会增加网络传输与首 token 等待。常规 Messages 请求由客户端每次携带完整上下文。
+
+## 输入与输出
+输入：Claude Messages API：首次请求包含完整 messages、system、tools 和 thread create；后续请求提供 previous_message_id 与新增 messages。每次请求启用相同 beta header。
+
+输出：标准消息响应及其 ID；下一次将最新响应 ID 用作 continuation，应用继续维护自己的完整对话真本。
+
+## 逐步流程
+
+### 首次创建
+带 message-threads-2026-08-12 beta header，提交完整历史、系统提示及工具定义，并设置 thread.type 为 create；保存返回消息 ID。
+
+### 增量继续
+下一请求设置 thread.type 为 continue、previous_message_id 为上次 ID，只传新增消息；完全省略 system 与 tools，连 null 也不能传。
+
+### 处理约束
+模型、thinking、tool_choice、output_config、顶层 cache_control 和 beta 集合等需保持一致；每个响应 ID 只能继续一次，分叉或修改需重放创建新线程。
+
+### 故障恢复
+应用持有完整历史；收到 thread_not_found 或需要更改固定设置时，以完整历史重新创建。SDK 助手可重放，但其历史仅在进程内存。
+
+## 关键机制
+服务端短暂缓存会话状态，后续请求无需重新上传并重新验证或分词整个历史，从而可能减少首 token 延迟；这与 prompt caching 和长期持久记忆是不同机制。
+
+## 作者结果与证据
+
+- 官方称可减少重复上传及历史处理，降低首 token 延迟。 文档描述机制，未提供可泛化的独立性能测量；本文未调用付费 API 或测量。 [原始来源](https://platform.claude.com/docs/en/build-with-claude/message-threads)
+
+- 支持所有模型，适用于 Claude API、Claude Platform on AWS、Anthropic 管理的 Google Cloud 和 Microsoft Foundry。 官方文档所列 beta 可用范围；账户、地区和平台权限仍需分别核验。 [原始来源](https://platform.claude.com/docs/en/build-with-claude/message-threads)
+
+- 空闲5分钟到期，状态为加密内存且在最后使用后一小时内删除。 官方数据保留说明；不具备 ZDR 或 HIPAA 资格。 [原始来源](https://platform.claude.com/docs/en/build-with-claude/message-threads)
+
+## 局限与未知
+- 服务端状态是尽力而为，不是持久存储；没有线程列表、读取或删除 API。
+- 不支持批处理、token counting、按需压缩及多数 context editing；具体支持范围应以当前文档为准。
+- 不改变 token 定价和速率限制，也不会自动开启 prompt caching；实际费用和性能需对照测量。
+- 线程不可直接分支，同一 response ID 仅能继续一次；并发协作须设计独立分支重建。
+
+## 工程建议（未经实测）
+- 工程建议：让应用持久化完整历史，设置过期回放和幂等工具执行，避免恢复时重复副作用。
+- 在相同模型、输入、缓存设置下对照请求字节、TTFT、账单及五分钟超时恢复；不要把线程机制当成长期记忆或可靠队列。
+- 未实际调用 API，延迟改善与成本收益尚未经独立验证。
+
+## 阅读范围
+已读官方发布记录及 message threads 文档中的创建、继续、固定参数、恢复、保留和兼容性；未运行 API。
+
+## 原始来源
+- [官方完整文档](https://platform.claude.com/docs/en/build-with-claude/message-threads)
+- [官方发布日期](https://platform.claude.com/docs/en/release-notes/overview)
