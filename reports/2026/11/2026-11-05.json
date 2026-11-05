@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-05",
+  "title": "AI 工程研究日报",
+  "edition_label": "2026-11-05｜不同步动态高斯与 Claude 短期消息线程",
+  "summary": "本期收录两项有明确原始来源的增量：新论文 Phase-DGS 研究不同步多视角重建，但评估使用真实时序锚点；Claude Message Threads 测试减少多轮重复上传，但不能替代长期记忆。",
+  "notice": "与11月4日报及公开历史比对；公开研究草稿。区分作者事实与工程判断，未运行训练、推理或付费 API。未发现可靠新增不代表领域没有进展。",
+  "verified_at": "2026-11-05T00:03:27Z",
+  "items": [
+    {
+      "id": "phase-dgs-unsynchronized-video",
+      "category": "数字人 / 几何",
+      "title": "Phase-DGS：用运动相位对齐不同步多视角，注意评测使用真实对应",
+      "finding": "11月4日公布的论文用冻结的 DINOv2 和相位网络估计各帧动作相位，以相位替代时间戳驱动现有动态高斯骨架；面向掉帧、冻结和时间偏移。",
+      "relevance": "可用于思考多机拍摄时间不同步如何影响动态人物重建；它不是表情驱动头像或静态 Mesh 导出方法。",
+      "action": "先在自有采集设计中保留同步参考并统计错位，再等代码开放后比较相同视角、相同时间对齐条件下的重建；不要先假定它能直接解决身份保持。",
+      "caveat": "作者评测使用真实时间对应建立锚点，且以 GT PSNR 搜索相位，基线没有同样先验；结果不等于公平的端到端自动同步。代码标注即将开放，未验证权重或实际运行。",
+      "recency_label": "新论文；代码尚未开放；作者实验与评测限制",
+      "source_date": "2026-11-03 10:51 UTC 提交；11月4日 arXiv 公布",
+      "sources": [
+        {
+          "title": "Phase-DGS 论文全文 v1",
+          "url": "https://arxiv.org/html/2611.04666v1"
+        },
+        {
+          "title": "作者项目页和开放状态",
+          "url": "https://oc-dev74.github.io/Phase-DGS/"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-05/phase-dgs-unsynchronized-video.md"
+    },
+    {
+      "id": "claude-message-threads-beta",
+      "category": "大模型前沿用法",
+      "title": "Claude Message Threads：服务端暂存会话以减少重复上传，但不是长期记忆",
+      "finding": "Anthropic 于11月2日公布 Messages API 的 message threads 测试：首次提交完整对话，后续引用上一条响应 ID，只传新增消息，减少重复上传和处理，目标是降低首 token 延迟。",
+      "relevance": "适合带多轮工具调用的研究或编码 Agent；与自管长期记忆不同，服务端状态短暂且可能丢失。",
+      "action": "在 Claude API 测试环境启用 message-threads-2026-08-12 beta：先用 create 发送完整对话，再用上一响应 ID 和 continue 发送新增消息；本地保留完整历史并验证过期后重建。对照测请求字节、首 token 延迟及费用。",
+      "caveat": "测试版支持所有模型及指定平台；空闲5分钟过期，最迟一小时删除；不支持 ZDR/HIPAA，不降低 token 单价或速率限制。每个响应只能继续一次，无法直接分叉；未调用 API 实测。",
+      "recency_label": "11月2日官方 beta；本期补充未收录增量；未实测",
+      "source_date": "2026-11-02 官方发布说明；2026-11-05 核查",
+      "sources": [
+        {
+          "title": "Claude Message Threads 官方文档",
+          "url": "https://platform.claude.com/docs/en/build-with-claude/message-threads"
+        },
+        {
+          "title": "Anthropic 官方发布记录",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-05/claude-message-threads-beta.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "新增 Phase-DGS 论文，代码尚未开放；不是已验证可部署方案。"
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "补充11月2日首次公布、历史日报未收录的 Claude message threads beta。"
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本轮未发现完成全文核查且符合增量标准的新条目。"
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "未发现完成核验的新条目；一项浏览器基准的博客与代码库数字不一致，暂不收录。"
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "本轮未发现完成核验且符合增量标准的新条目。"
+    }
+  ]
+}
