@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-06",
+  "title": "AI 工程研究日报",
+  "edition_label": "2026-11-06｜多视角融合预算与审批恢复安全",
+  "summary": "本期三项：CrossPressor 限制多视角融合开销；LangGraph 加入严格恢复检查；RAGFlow 修复孤儿检索块过滤。",
+  "notice": "对照11月5日报及公开历史；公开研究草稿。作者实验、源码事实与工程建议分开，未运行模型或测试。未发现新增不代表领域无进展。",
+  "verified_at": "2026-11-06T00:04:50Z",
+  "items": [
+    {
+      "id": "crosspressor-support-fusion-budget",
+      "category": "数字人 / 几何",
+      "title": "CrossPressor：压缩多视角融合开销，注意整体加速远小于局部加速",
+      "finding": "新论文在已有 ZPressor 锚点式多视图重建中，保留完整锚点查询，仅对支持视角特征进行跨视角、跨层轮换采样，并在 K/V 投影前打包；复用已有权重，无须重新训练。",
+      "relevance": "适合研究大量相机输入时的特征融合瓶颈，不是人脸几何或可驱动表示的新方案。",
+      "action": "先测现有流程融合占总耗时比例；代码发布后，在相同权重与数据上比较融合时间、端到端时间、总显存及保留视角细节。",
+      "caveat": "仅静态场景实测；256视角下局部26.12倍不等于整体26倍，总体为1.43倍；融合显存下降但模型峰值显存基本不变。官方仓库尚为占位，未复现。",
+      "recency_label": "11月5日公布论文；代码准备中；作者结果",
+      "source_date": "2026-11-04 10:07 UTC 提交，11月5日 arXiv 公布",
+      "sources": [
+        {
+          "title": "论文全文及附录",
+          "url": "https://arxiv.org/html/2611.06258v1"
+        },
+        {
+          "title": "作者项目页",
+          "url": "https://yuhsihu.github.io/CrossPressor/"
+        },
+        {
+          "title": "固定提交代码开放状态",
+          "url": "https://github.com/YuhsiHu/CrossPressor/blob/d071d951eb0949034d79ecdc22646294e0261b41/README.md"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-06/crosspressor-support-fusion-budget.md"
+    },
+    {
+      "id": "langgraph-strict-interrupt-resume",
+      "category": "智能体 / 应用",
+      "title": "LangGraph 1.2.20：过期审批显式失败，连续中断使用不同身份",
+      "finding": "11月5日发布的核心1.2.20加入严格恢复校验与独立中断身份：可让过期、空或有歧义的恢复请求显式失败，避免旧审批误答同一节点的下一问。",
+      "relevance": "长期 Agent 人工审批需要处理重复点击、延迟回复和节点重试；中断身份校验能缩小错误恢复范围，但不能替代权限或幂等控制。",
+      "action": "在隔离图中用内存或 SQLite 检查连续两问：开启实验性严格配置，重复提交第一问 ID 应报错并保持第二问等待；再验证当前 ID。勿对真实副作用测试。",
+      "caveat": "严格模式默认关闭，核心1.2.20仅为私有配置键；Python SDK 参数11月5日后续合并，但当日发布的0.4.13不含该参数，远端还需服务端声明支持；未运行测试。",
+      "recency_label": "核心正式发布；SDK 参数已合并但尚未证实发布；作者测试",
+      "source_date": "核心1.2.20：2026-11-05 02:20 UTC；SDK PR：2026-11-05 16:15 UTC 合并",
+      "sources": [
+        {
+          "title": "核心 1.2.20 发布",
+          "url": "https://github.com/langchain-ai/langgraph/releases/tag/1.2.20"
+        },
+        {
+          "title": "严格恢复校验 PR",
+          "url": "https://github.com/langchain-ai/langgraph/pull/9574"
+        },
+        {
+          "title": "连续中断 ID 修复 PR",
+          "url": "https://github.com/langchain-ai/langgraph/pull/9589"
+        },
+        {
+          "title": "Python SDK 新参数 PR",
+          "url": "https://github.com/langchain-ai/langgraph/pull/9599"
+        },
+        {
+          "title": "固定版本测试",
+          "url": "https://github.com/langchain-ai/langgraph/blob/1.2.20/libs/langgraph/tests/test_strict_resume.py"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-06/langgraph-strict-interrupt-resume.md"
+    },
+    {
+      "id": "ragflow-prune-orphan-retrieval-chunks",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow：过滤无来源检索块，并保留合法数据集编译结果",
+      "finding": "11月5日合入主分支的修复在检索打分前过滤无字段、缺少有效文档 ID 或源文档已不存在的普通块，保留满足严格条件的数据集编译块和原始引擎字段。",
+      "relevance": "用于降低已删文档残留块进入下游生成的风险；属于结果一致性修复，不是新检索算法或权限校验。",
+      "action": "在隔离测试中混合有效块、孤儿块、空文档 ID 和合法编译块，检查返回顺序、原始字段和空结果，再确认部署版本是否包含提交。",
+      "caveat": "已合主分支，未确认稳定发行包或镜像包含；测试用内存 SQLite 与模拟检索引擎，未验证生产并发，也没有召回率或问答质量结论。",
+      "recency_label": "11月5日合并；稳定包未核实；未实测",
+      "source_date": "2026-11-05 02:43 UTC 合并",
+      "sources": [
+        {
+          "title": "合并提交",
+          "url": "https://github.com/infiniflow/ragflow/commit/6fd888fc0b82157be06db35f54751534a7ae0ac4"
+        },
+        {
+          "title": "修复 PR",
+          "url": "https://github.com/infiniflow/ragflow/pull/21627"
+        },
+        {
+          "title": "过滤实现",
+          "url": "https://github.com/infiniflow/ragflow/blob/6fd888fc0b82157be06db35f54751534a7ae0ac4/internal/service/nlp/retrieval.go#L1236"
+        },
+        {
+          "title": "边界测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/6fd888fc0b82157be06db35f54751534a7ae0ac4/internal/service/nlp/retrieval_prune_test.go"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-06/ragflow-prune-orphan-retrieval-chunks.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "收录 CrossPressor 新公布论文，面向多视角场景融合，不等于人脸或动态 Avatar 已验证。"
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "收录 LangGraph 中断恢复检查的正式核心版本及 SDK 发布边界。"
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "本轮未发现完成原始来源核查且应独立收录的可信新变化；不重复旧机制。"
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "收录主分支孤儿检索块过滤修复；稳定镜像是否包含未核实。"
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "本轮无完成核验的重点新增。"
+    }
+  ]
+}
