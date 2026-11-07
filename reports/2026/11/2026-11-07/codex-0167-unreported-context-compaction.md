@@ -1,0 +1,73 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-07
+---
+
+# Codex 0.167：失败响应留下的推理也要计入压缩预算
+
+来源日期：2026-11-06 01:40 UTC 发布；PR于2026-10-30 18:12 UTC合并
+
+核查时间：2026-11-07T00:06:27Z
+
+状态：公开研究草稿。来源事实、作者结果与工程建议分别标注，未独立复现。
+
+## 问题
+模型请求失败、达到输出上限或未返回可用 usage，并不代表该次输出没有进入历史。旧计数从最后一条模型输出之后估算新增内容，可能把已经保留的未计量推理跳过，导致长会话越积越大而压缩启动过晚。
+
+## 输入与输出
+输入：Codex core保留的历史条目、最近有效用量报告覆盖范围、响应的usage与完成状态，以及已有自动压缩阈值。
+
+输出：用于自动压缩判断的上下文总量估计；未被有效usage覆盖的保留内容加入估算，不把纯花费更新误当作新的上下文基线。
+
+## 流程
+
+### 记录有效计量覆盖范围
+增加 last_server_reported_usage_item_count，并独立跟踪最后模型输出的位置。成功且有可用usage时推进覆盖边界；没有输出的成功请求也按发送的输入条数覆盖相应历史。
+
+### 失败后保留增量
+响应失败后的花费统计更新不推进上下文覆盖边界。后续估算将边界之后的用户、工具和模型保留条目一起计入，不因出现一条新的模型输出就跳过它。
+
+### 避免推理重复计数
+边界之后的推理已经包含在尾部估算中，旧推理补算只考虑边界之前的适用内容；同时对齐远端压缩删除量的估计。
+
+### 触发已有压缩流程
+修正后的总量交给已有自动压缩阈值。变化是何时触发的预算依据，不是新的摘要模型、上下文容量或压缩质量保证。
+
+## 关键机制
+把“最后一条模型输出”与“最后一次有效usage覆盖到哪里”拆成两个状态。失败及缺usage输出继续留在未计量尾部，直至之后有效计数覆盖它们。这是长任务harness的计量与恢复一致性修复。
+
+## 来源结果与证据
+
+- **0.167.0修正了0.166.0中的估算边界。** 对比两个正式tag：旧版使用items_after_last_model_generated_item；新版使用items_since_last_usage并维护独立覆盖边界。修复PR在0.167.0正式发布说明中列出。 [原始来源](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/context_manager/history.rs)
+
+- **回归测试明确检查未计量推理能触发压缩。** auto_compact_accounts_for_unreported_reasoning构造80 tokens基线与两段12000字符的模拟推理，每段估计约3000 tokens，阈值5000；断言五次请求中的compaction_trigger数量依次为[0,0,0,1,0]，即在继续请求前压缩。 [原始来源](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/tests/suite/compact.rs)
+
+- **测试覆盖响应状态与usage缺失，不等于生产效果实测。** 四个参数场景为incomplete有usage、incomplete无usage、completed无usage，以及非Responses Lite的incomplete无usage。使用本地模拟服务；本轮仅阅读，未执行这些测试。 [原始来源](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/tests/suite/compact.rs)
+
+- **单元测试检查空响应、纯花费更新和推理去重。** total_token_usage_includes_all_items_since_last_usage在包含/不包含推理的计量方式下，验证空成功响应覆盖输入、失败花费不覆盖残留输出、最终模型项之后的工具输出仍需估算。 [原始来源](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/context_manager/history_tests.rs)
+
+## 局限与未知
+- 正式发布于11月6日，但实现PR于10月30日合并；应写稳定版可用性增量，不能说11月6日才提出这一机制。
+- 这是上下文估计与压缩触发修复，没有新的上下文窗口、压缩质量、延迟或成本改善数字。
+- 覆盖边界不写入rollout。恢复或改写历史时仍按最后模型输出位置重建近似边界，不能宣称旧会话全部计数问题因此解决。
+- 测试使用人工构造的响应及推理载荷，不是任意网关、真实模型或长期生产回归；本次未安装CLI、调用API或运行测试。
+- GitHub正式发行及固定源码已确认，不代表所有桌面、云端或托管集成已同步采用该core版本。
+
+## 工程建议（未经实测）
+- 最小验证建议直接复用0.167.0固定版本的auto_compact_accounts_for_unreported_reasoning夹具，不要用生产长会话耗费大量tokens逼近阈值。
+- 先验证一段约3000 tokens残留时不压缩，再验证第二段累积后在继续请求前出现压缩；分别保留与删除usage字段。
+- 补测空成功响应，确保其输入已被计量后不重复估算；补测失败响应只更新spending的路径，确保未计量输出不被忽略。
+- 自建Agent也应分离账单花费、已计量上下文和本地新增历史；该建议是对源码机制的工程推导，并非跨系统验证结果。
+
+## 阅读范围
+已读0.167.0正式发布说明、#58404原始PR与完整相关diff、0.166.0和0.167.0固定历史实现、0.167.0压缩回归测试与历史单元测试。已与2026-10-09至2026-11-06全部29篇公开日报去重。未运行测试。 核查时间：2026-11-07T00:06:27Z。
+
+## 原始来源
+- [Codex 0.167.0 正式发布](https://github.com/openai/codex/releases/tag/rust-v0.167.0)
+- [计数修复 PR #58404](https://github.com/openai/codex/pull/58404)
+- [0.167.0 上下文计数实现](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/context_manager/history.rs)
+- [0.166.0 旧实现](https://github.com/openai/codex/blob/rust-v0.166.0/codex-rs/core/src/context_manager/history.rs)
+- [固定版本压缩回归测试](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/tests/suite/compact.rs)
+- [固定版本历史计数单元测试](https://github.com/openai/codex/blob/rust-v0.167.0/codex-rs/core/src/context_manager/history_tests.rs)
