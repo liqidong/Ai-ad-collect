@@ -1,0 +1,86 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-08
+---
+
+# MinerU 收紧 URL 入库：先验证全部 DNS 结果，再固定公网连接
+
+核查时间：2026-11-08T00:02:52Z
+
+## 核心问题与新增变化
+
+面向用户提供文档 URL 的解析服务，下载代码本身就处于信任边界。旧实现把 URL 交给普通 httpx.AsyncClient；即便来源协议只允许 HTTPS，也不能据此保证服务器连接的是公网地址。内网域名、一次解析返回公私网混合地址、校验之后重新解析，以及部署环境中的 HTTP 代理，都需要在实际建立连接的位置处理。PR #5730 新增专用 URL 下载 transport，把地址验证与真正使用的网络目标绑定起来，保护的是文档入库的下载入口。
+
+## 输入与前提
+
+输入是 Tasks API 的 URL 来源、既有来源协议策略、下载超时和字节数上限，以及系统 DNS 返回的 IPv4/IPv6 地址列表。默认来源仍为 HTTPS，HTTP 仍须显式启用；默认下载超时 60 秒、大小 200 MiB 是已有设置，并非本次新增。该路径与客户端上传文件的路径分开。
+
+## 输出及可用范围
+
+允许的来源继续产出文档字节及 source_uri、媒体类型和传输编码，交给原有解析管线。任一 DNS 结果违反公网单播地址策略时，文件返回 unsupported_source，不产生可下载解析结果；DNS 超时、连接失败和 HTTP 状态异常保留相应失败语义。授权的内网文档可走客户端上传，不必放开 URL 下载到内网。
+
+## 逐步流程
+
+1. **先保留已有来源策略，再集中解析目标**
+
+_extract_bytes 仍先执行既有协议检查。新增 _resolve_public_addresses 在连接超时预算内调用系统 getaddrinfo，获取全部 TCP 地址；空结果和解析失败直接结束。地址集合在建立第一个连接之前完成整体验证，而不是挑到一个公网地址就忽略其余结果。
+
+2. **归一化并验证整个地址集合**
+
+_public_address 将 IPv4-mapped IPv6 归一化为 IPv4，只接受 global、非 multicast、非 reserved 的地址，并补充特殊网段拒绝规则。带 IPv6 zone identifier 的来源也被拒绝。若一个 DNS 应答同时包含公网和内网地址，整个 URL 失败；通过的地址去重后形成固定候选列表。
+
+3. **实际连接固定到已验证 IP**
+
+UrlSourceTransport 把网络请求 URL 的 host 替换成候选 IP，但保留原 Host 头，并显式传入原域名作为 TLS SNI。路径及查询串不重写，HTTPS 的域名证书验证语义也保留。如此，验证后的连接不再依赖第二次域名解析；同一 IP 被不同域名使用时，禁用 keep-alive 连接复用，避免混用已连接的域名上下文。
+
+4. **连接失败只在已验证集合内回退**
+
+连接阶段发生 ConnectError 或 ConnectTimeout，才尝试下一个候选 IP。DNS 与后续连接共用连接阶段截止时间；每次尝试按剩余地址数量分配剩余连接时间，避免第一个不可达 IPv6 吃光全部预算。读取阶段仍使用原 read timeout，这不是整次下载的绝对墙钟时间保证。
+
+5. **固定代理、重定向与输出边界**
+
+AsyncClient 使用专用 transport、trust_env=False 和显式 follow_redirects=False，环境 HTTP_PROXY、HTTPS_PROXY、ALL_PROXY 不再接管 URL 来源下载。transport 保留环境 CA 配置，因此 SSL_CERT_FILE、SSL_CERT_DIR 仍用于证书验证。原实现默认就不跟随重定向，本次把这一点显式固定并加回归，不能写成首次禁用重定向。响应继续流式读入，并沿用既有字节数上限。
+
+## 关键机制
+
+关键增量是把“准许访问哪些地址”的判定下沉到下载 transport，并让连接只使用那次判定得到的地址集合。单独检查 URL 字符串或先查域名再让普通客户端自行连接，会留下验证对象与连接对象不一致的空间；此实现通过固定 IP、保留 Host/SNI、关闭环境代理接管和跨域名连接复用，使两者对齐。它不增加文档抽取精度，也不提高 RAG 召回指标。与10月15日报的 Crawl4AI Docker 出口代理修复不同，这里针对 MinerU Tasks/Router 的用户 URL 下载路径，采用直接连接已验证公网 IP 的方式。
+
+## 已有证据
+
+- **已进入开发分支，尚不能称为稳定包已修复。**：PR #5730 于2026-11-07 08:44:53 UTC合入 dev，合并提交1a1ebabddb654d2b39ed5aa6df66a4b635c295fd。最初 URL 防护提交 d020a553505e67f279132fa64b52be14303cbc0f 为11月6日10:37:27 UTC，候选回退调整95892d7d1fc588f914903acd2308320a317caf9a为11月6日17:51:19 UTC。核查时最新正式 release 仍是11月4日12:38:24 UTC发布的4.1.7。 [原始来源](https://github.com/opendatalab/MinerU/pull/5730)
+- **回归用例覆盖公私网混合 DNS、重新绑定、Host/SNI 与签名路径保留。**：test_url_source_security.py 使用模拟 DNS 和底层发送函数，断言混合地址在任何连接前失败；首次连接失败后即使把后续 DNS 应答改为回环地址，也只使用最初验证的候选集合；固定 IP 的同时保留原 Host、SNI、百分号编码路径和查询串。读取的是测试设计及断言，本轮未自行执行。 [原始来源](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/tests/unittest/test_url_source_security.py)
+- **失败语义覆盖直接 API 与 Router，不只测试单个地址判断函数。**：测试对匿名及带 API key 的直接 API/Router 请求都检查逐文件 unsupported_source、无 result_url；另用合成 HTML 验证环境代理变量存在时，合法公网下载仍经固定 IP 产出正文。测试也检查重定向目标不被请求、DNS 等待超时和任务取消。本轮没有向真实内网、云元数据或第三方受限端点发请求。 [原始来源](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/tests/unittest/test_url_source_security.py)
+- **官方该合并提交的 CI result 与 Linux 单元测试矩阵显示 success，但未独立复现。**：读取了精确合并 SHA 的 GitHub check-runs 状态；Ubuntu Python 3.11、3.12、3.13、3.14 的 cli-test 均为 success。固定提交 .github/workflows/cli.yml 在 Linux 对 tests/unittest 运行 not torch 测试，因此该安全回归文件在其收集范围内。未逐条下载测试 XML，也未声称完成独立渗透测试或完整安全审计。 [原始来源](https://github.com/opendatalab/MinerU/actions/runs/42356782946)
+
+## 局限与未知
+
+- 仅核实源码、回归设计和官方 CI 状态。本轮未部署 MinerU，未运行新增测试，未验证 PyPI 新包或线上服务行为。
+- 合并目标为 dev，最新正式版仍为4.1.7。不能把11月7日合入写成11月7日正式发布，也不能建议仅升级到4.1.7就获得此修复。
+- 环境代理不会参与 URL 来源下载；依赖企业代理的部署可能需要调整。Fake-IP DNS 的保留地址会被拒绝，worker 需得到真实公网 DNS 结果。
+- 公网地址检查不等于文档来源可信、内容安全或采集合规。版权、站点条款、授权、robots及访问频率仍须独立处理；不得绕过登录、验证码或访问控制。
+- 它不是解析器整体的安全证明。服务仍应启用 API key 并限制 worker 出站网络；源文档本身的资源消耗、解析依赖和内容风险另有边界。
+- TLS CA 环境配置仍保留，不应把 trust_env=False 理解成完全忽略所有环境配置。连接总预算与读取超时也不是同一个概念。
+
+## 工程判断与最小试用
+
+- 最小验证应在隔离环境固定旧版与合并提交，以模拟 DNS/HTTP transport 运行 tests/unittest/test_url_source_security.py。优先检查：混合公私网应答零连接、首次失败后只使用已验证候选、Host/SNI及签名路径不变、代理变量不接管、重定向不跟随。
+- 对外提供 URL 入库前，还应验证对应部署是否依赖 HTTP 代理、Fake-IP DNS或内网来源。遇到合法内网文档需求，优先使用已有客户端上传路径，而非放宽公网下载规则。
+- 可在具备项目测试依赖的独立环境使用 python -m pytest -o addopts='' tests/unittest/test_url_source_security.py。该命令仅作为复现建议，本轮没有运行；不应拿真实受限地址做在线扫描。
+- 采集侧发布时明确这是输入下载路径的安全维护，不作为新的检索算法、抽取精度或吞吐提升。
+
+## 阅读范围
+
+直接读取了PR元数据、20条提交的日期/标题、64个变更文件清单，并全文核读新增URL transport、URL安全回归测试、相关API入口和Tasks文档差异；读了固定合并SHA的API入口、CI workflow和check-runs状态。其他解析/表格/WebUI差异仅为候选筛查，不纳入本文结论。对照11月1至7日报及10月15、24、29、30日报；10月15的Crawl4AI Docker出口修复为不同项目与路径，不将一般SSRF原理当本日新发明。未运行代码、模型、在线探测或第三方安全扫描，未穷尽全网和全部历史日报。 核查时间：2026-11-08T00:02:52Z。
+
+## 原始来源
+
+- [PR #5730：合入dev的时间和范围](https://github.com/opendatalab/MinerU/pull/5730)
+- [固定合并提交：下载transport实现](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/mineru/parser/url_source.py)
+- [固定合并提交：URL读取入口](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/mineru/parser/api_server.py)
+- [固定合并提交：URL来源安全回归](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/tests/unittest/test_url_source_security.py)
+- [固定合并提交：Tasks来源规则与部署边界](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/docs/zh/usage/tasks.md)
+- [固定合并提交：CI收集范围](https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/.github/workflows/cli.yml)
+- [该合并提交的官方CI运行](https://github.com/opendatalab/MinerU/actions/runs/42356782946)
+- [最近正式版4.1.7：11月4日发布](https://github.com/opendatalab/MinerU/releases/tag/mineru-4.1.7-released)
