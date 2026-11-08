@@ -1,0 +1,142 @@
+{
+  "date": "2026-11-08",
+  "title": "AI 工程研究日报",
+  "edition_label": "2026-11-08｜头像数据开放、项目信任与下载边界",
+  "summary": "本期三项实质增量：EDGAR 公开 CAFCA 合成数据子集；Codex 预览版拆开写权限与项目信任；MinerU 开发分支收紧 URL 下载边界。",
+  "notice": "对照11月7日报及公开历史。作者发布、源码证据、工程建议与未复现实验分开；没有独立运行训练、解析或安全回归。未发现合格新增不代表领域没有进展，不用历史基线填充。",
+  "verified_at": "2026-11-08T00:02:52Z",
+  "items": [
+    {
+      "id": "edgar-cafca-public-release",
+      "category": "数字人 / 几何",
+      "title": "EDGAR 公开合成修复训练子集，作者权重仍受限",
+      "finding": "11月7日官方文档将 CAFCA-only 从私有改为公开下载，包含1,500个合成身份、22,420个参考图／目标图／退化渲染三联样本。公开 API 已列出11个 TAR、元数据 ZIP 和校验文件；v1.0 资产原发布时间为11月5日，并非11月7日新上传。",
+      "relevance": "降低头像渲染修复研究的数据获取门槛。公开训练入口允许从 SD-Turbo 初始化新模型，不必先取得私有 EDGAR checkpoint；这不是已训练模型开放。",
+      "action": "先核对非商业许可、全部分片校验与身份不交叉切分，再做少量训练更新、保存恢复和真实留出身份测试。详解区分三联图顺序、依赖及完整复现缺口。",
+      "caveat": "Both 混合数据和作者六专家权重仍私有，无 CAFCA-only 预训练 checkpoint。数据 CC BY-NC-SA 4.0；本轮未下载大资产或运行训练。数据不是三维几何真值，不能直接修正结构、导出 Mesh 或保证连续帧稳定。",
+      "recency_label": "官方公开下载说明11月7日更新；合成数据可公开获取，完整推理仍受限",
+      "source_date": "v1.0 资产原发布时间：2026-11-05 04:12:47 UTC；数据说明更新：2026-11-07 03:23:34 UTC；代码下载说明更新：03:24:21 UTC。精确转公开时刻未证实。",
+      "sources": [
+        {
+          "title": "公开下载变更提交",
+          "url": "https://github.com/kwanyun/edgar-code/commit/18375bc7b8ddd5feaddbc653e77ebb7175860cfe"
+        },
+        {
+          "title": "v1.0 公开数据资产",
+          "url": "https://github.com/kwanyun/edgar-set-cafca/releases/tag/v1.0"
+        },
+        {
+          "title": "权重与 Both 仍受限的下载说明",
+          "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/docs/downloads.md"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-08/edgar-cafca-public-release.md"
+    },
+    {
+      "id": "codex-explicit-project-trust",
+      "category": "大模型前沿用法",
+      "title": "Codex 预发布版：工作区可写不再隐含信任项目 MCP 配置",
+      "finding": "11月7日合并的修复将非交互执行的工作目录传递与项目信任分开，避免仅指定 workspace-write 就启用未授信项目配置；新增 --trust 明确保存授信。已核进入 0.169.0-alpha.3，不能当作稳定版 0.167 的能力。",
+      "relevance": "适合 CI、自动审查和定时编码任务，防止文件写权限被误当成允许仓库配置启动宿主进程。这与昨日失败响应 token 计数修复是独立增量。",
+      "action": "在隔离 CODEX_HOME、自建测试仓库与模拟 MCP 服务中验证默认禁用、显式授信、跨次持久和拒绝优先。不要为跑通流水线对不可信仓库统一添加 --trust。",
+      "caveat": "仅确认预发布源码与资产，未安装或独立运行。--trust 即使搭配 --ephemeral 仍持久，MCP 命令可能在沙箱外运行；不涵盖所有 app-server 授信路径，合并点公开 CI 非全绿。",
+      "recency_label": "11月7日合并并进入预发布版；源码核验，未独立实测",
+      "source_date": "PR #60041：2026-11-07 02:39:18 UTC 合并；0.169.0-alpha.3：2026-11-07 19:31:41 UTC 发布。",
+      "sources": [
+        {
+          "title": "PR #60041",
+          "url": "https://github.com/openai/codex/pull/60041"
+        },
+        {
+          "title": "0.169.0-alpha.3 预发布版",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.3"
+        },
+        {
+          "title": "固定提交的回归测试",
+          "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/tests/suite/mcp_required_exit.rs"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-08/codex-explicit-project-trust.md"
+    },
+    {
+      "id": "mineru-url-source-validation",
+      "category": "采集 / 工具",
+      "title": "MinerU 收紧 URL 入库：先验证全部 DNS 结果，再固定公网连接",
+      "finding": "11月7日合入 dev 的修复在连接前验证全部 DNS 地址，再固定连接已验证公网 IP，同时保留 Host/SNI 和签名路径、隔离环境代理，减少文档 URL 下载入口的 SSRF 风险。",
+      "relevance": "适用于面向用户开放 URL 入库的知识库服务，保护下载入口；不提升文档解析准确率、检索召回或模型能力。",
+      "action": "固定合并提交，在隔离环境用模拟 DNS/HTTP 回归验证混合地址零连接、候选回退、代理与 TLS 边界，并检查部署是否依赖企业代理或 Fake-IP DNS。",
+      "caveat": "最新正式版仍为11月4日的4.1.7；只确认开发分支、测试源码及作者 CI，本轮未运行测试或确认线上部署。旧客户端原本默认不跟随重定向，本次只是显式固定，不冒充新能力。",
+      "recency_label": "11月7日进入开发分支；稳定包尚未确认包含",
+      "source_date": "初始 URL 防护提交：2026-11-06 10:37:27 UTC；PR #5730 于2026-11-07 08:44:53 UTC 合入 dev。",
+      "sources": [
+        {
+          "title": "PR #5730",
+          "url": "https://github.com/opendatalab/MinerU/pull/5730"
+        },
+        {
+          "title": "固定提交的 URL 下载实现",
+          "url": "https://github.com/opendatalab/MinerU/blob/1a1ebabddb654d2b39ed5aa6df66a4b635c295fd/mineru/parser/url_source.py"
+        },
+        {
+          "title": "最新正式版4.1.7",
+          "url": "https://github.com/opendatalab/MinerU/releases/tag/mineru-4.1.7-released"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-08/mineru-url-source-validation.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "收录 EDGAR 合成数据公开这一可用性变化，不重复昨日论文方法。对既有头像／多视图仓库的定向核查未见其他合格新增，未用旧论文补位。",
+      "sources": [
+        {
+          "title": "EDGAR 下载变更",
+          "url": "https://github.com/kwanyun/edgar-code/commit/18375bc7b8ddd5feaddbc653e77ebb7175860cfe"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本轮未核得值得独立成卡的算法或稳定能力新增；RAGFlow、LightRAG 定向提交核查未见窗口内更新。MinerU 下载边界维护归入采集栏目，不包装为 RAG 效果提升。",
+      "sources": [
+        {
+          "title": "RAGFlow 提交历史",
+          "url": "https://github.com/infiniflow/ragflow/commits/main/"
+        },
+        {
+          "title": "LightRAG 提交历史",
+          "url": "https://github.com/HKUDS/LightRAG/commits/main/"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "本轮未核得新增的可靠长程执行、记忆或自主任务成功率证据。Codex 项目信任变化归入大模型前沿用法；不把权限修复当作自治或编码质量突破。"
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "收录 MinerU 开发分支 URL 下载防护。Docling 文本转义、MarkItDown Windows 路径修复和 Firecrawl 弃用端点维护未展开成技术卡；未把提交等同部署。",
+      "sources": [
+        {
+          "title": "MinerU PR #5730",
+          "url": "https://github.com/opendatalab/MinerU/pull/5730"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "收录 Codex 非交互授信接口变化，明确预发布范围。Claude Code 最新版本仍为11月6日的 v2.1.319，未重复作为本窗口新发布；其余未核得合格新增。",
+      "sources": [
+        {
+          "title": "Claude Code 发布记录",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "Codex 预发布记录",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.3"
+        }
+      ]
+    }
+  ]
+}
