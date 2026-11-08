@@ -1,0 +1,134 @@
+{
+  "id": "edgar-cafca-public-release",
+  "title": "EDGAR-SET CAFCA-only：合成头像修复训练数据公开，完整权重仍受限",
+  "problem": "11月7日报已介绍 EDGAR，但当时官方文档将权重与两个数据包都列为私有。11月7日的新变化是 CAFCA-only 数据包被明确公开，研究者可以取得已配对的头像渲染失败、目标与同身份参考图。它降低的是修复模型训练数据的获取门槛，不是发布新算法，也不是完整 EDGAR 实验已可复现。",
+  "inputs": "公开 v1.0 发布页的 EDGAR-SET-CAFCA-only-metadata.zip、对应 .sha256，以及 cafca-00000.tar 至 cafca-00010.tar 共11个分片；分片总计11,685,611,520字节，下载约11.7 GB，解压还需约同等空间。\n\n数据包含22,420个三联样本，来自1,500个合成CAFCA身份。每个PNG为1536×512，按参考图、目标真值图、退化渲染图排列，三块各为512×512。\n\n若训练新的修复模型：官方公开训练代码、Linux/Python 3.10/CUDA环境，以及另行取得并遵守许可的SD-Turbo、Sapiens 0.3B预训练特征权重、POSTER V2完整特征网络、VGG16/LPIPS依赖。\n\n若直接使用论文作者的六专家推理模型或微调其权重，仍需取得私有EDGAR checkpoint访问权限；此公开数据包本身不提供该权重。",
+  "outputs": "解压后得到 triplets/CAFCA 下的三联PNG、样本索引、校验信息和两套训练/验证清单。\n\n使用公开训练入口可以启动一个新的CAFCA-only训练实验，产生本地JSONL指标和训练checkpoint；这是代码支持的路径，不是本次已完成的训练。\n\n数据包不输出可驱动3D Avatar或Mesh，也不包含FLAME模型、原始视频、跟踪网格或EDGAR权重。已有Avatar的离线精化仍属于另一步，需训练好的修复器与相应原生渲染器及资产。",
+  "pipeline": [
+    {
+      "title": "先确认公开范围与许可",
+      "explanation": "使用CAFCA-only公开仓库与v1.0资产，保留NOTICE与LICENSE。数据采用CC BY-NC-SA 4.0：要求署名、非商业用途，分享改编材料时遵守相同许可条件；不能把它当作可自由商用的数据。代码和外部模型资产有独立条款。Both混合数据包和作者checkpoint仍是私有资源。"
+    },
+    {
+      "title": "下载命名资产并核验",
+      "explanation": "浏览器无需登录即可按官方说明下载metadata ZIP、校验文件和全部11个TAR。不要下载自动生成的Source code归档代替数据。先验证metadata ZIP的SHA256，再解压元数据；将TAR放入包目录的shards子目录。官方tools/unpack_dataset.py会在写入图像前核对所有分片的字节大小与SHA256，并拒绝已有输出目录、危险路径及重复成员。"
+    },
+    {
+      "title": "选择与目标相符的切分",
+      "explanation": "manifest.json保留恢复出的排序后99/1文件切分，含22,195个训练样本和225个验证样本，身份可能重叠。新的训练实验优先考虑manifest_identity_disjoint.json，它以seed 2026的稳定SHA256排序留出约2%身份；这不是论文原始切分。先核对索引中的身份集合再报告泛化结果。"
+    },
+    {
+      "title": "小规模训练检查，再决定完整实验",
+      "explanation": "在隔离环境按官方README准备依赖，以新输出目录调用edgar-train，传入身份不交叉的manifest、Sapiens与POSTER路径。--initialize和--resume均为可选；不提供EDGAR checkpoint时，模型从SD-Turbo基础权重初始化新增组件，可开展新的合成数据训练。先检查少量更新、损失、保存/恢复和留出身份推理，再考虑README示例的40,000步设置。不能将原论文混合数据训练成本或效果直接归给这个实验。"
+    },
+    {
+      "title": "单独验证真实头像迁移",
+      "explanation": "CAFCA-only主要提供可恢复的合成渲染退化监督。用自有或获授权的真实头像样本另设留出身份、视角与表情测试，分别检查身份、口型、跨视角细节和连续帧稳定性。三联样本的目标是图像修复监督，不是新生成的三维几何真值。"
+    }
+  ],
+  "mechanism": "此次增量是访问与可复核数据交付：此前私有的数据子集现在可公开获取，配套命名分片、样本哈希和显式切分。样本仍是原先恢复并筛选的CAFCA派生三联图，未重压缩、重新增强或新增身份。其训练逻辑是以退化渲染与同身份参考图预测对齐目标，随后训练好的修复器才能为已有Gaussian Avatar生成优化伪目标。11月7日代码提交只更新README及数据/下载文档，没有改变神经网络或训练算法。",
+  "results": [
+    {
+      "claim": "官方在11月7日明确将CAFCA-only列为公开资源，构成相对前一期的实质可用性变化。",
+      "evidence": "数据仓库61600af0提交于2026-11-07T03:23:34Z，更新公开下载与解压说明；代码仓库18375bc7提交于03:24:21Z，将CAFCA-only由Private download改为Public download。GitHub仓库API当前返回private=false、visibility=public，公开网页可读。v1.0发布元数据仍为2026-11-05T04:12:47Z，因此应写11月7日确认公开访问，而不是11月7日创建或上传的新数据版本。无法仅据updated_at推定可见性切换的精确秒数。",
+      "source": "https://github.com/kwanyun/edgar-code/commit/18375bc7b8ddd5feaddbc653e77ebb7175860cfe"
+    },
+    {
+      "claim": "已核实公开发布元数据列出完整的11个TAR分片及metadata ZIP和校验文件，但未下载全部图像。",
+      "evidence": "官方releases/tags/v1.0 API返回13个命名资产，其中11个TAR、1个metadata ZIP与1个ZIP的.sha256文件；逐项包含字节大小、下载地址和SHA256 digest。数据卡给出22,420个三联样本、1,500个合成身份。资产上传日期仍为11月5日。本轮只核对资产清单与文档，没有做11.7 GB逐字节下载、校验或图像抽检。",
+      "source": "https://api.github.com/repos/kwanyun/edgar-set-cafca/releases/tags/v1.0"
+    },
+    {
+      "claim": "公开数据足以支持新的CAFCA-only训练研究，但不等于开放论文的现成推理能力。",
+      "evidence": "README的训练示例不要求EDGAR初始化checkpoint；train.py将可选resume或initialize传入模型，model.py在无checkpoint时使用stabilityai/sd-turbo初始化。下载文档明确没有独立CAFCA-only checkpoint，论文使用的checkpoint由两种数据源训练，仍需私有仓库访问；Both数据集仍等待NeRSemble派生图像再分发许可。",
+      "source": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/docs/downloads.md"
+    },
+    {
+      "claim": "本次没有新增CAFCA-only性能结论，作者已有工程验证也不能替代完整复现。",
+      "evidence": "VALIDATION记录11月4日至5日在RTX A6000 48 GB上的短训练、保存/恢复与原生Avatar冒烟检查，并明确不证明40,000步收敛或全部论文指标复现。数据文档明确CAFCA-only不复现混合数据实验，原始99/1切分也不是身份不交叉评估。",
+      "source": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/VALIDATION.md"
+    }
+  ],
+  "limitations": [
+    "开放的是合成子集，不含110,495个NeRSemble派生真实采集三联样本；132,915样本的Both包仍私有。不能称完整EDGAR-SET或完整复现资产已开放。",
+    "作者六专家推理权重仍私有，未提供CAFCA-only预训练checkpoint。没有权重访问的用户可研究数据或训练新模型，不能直接获得论文模型的即用推理。",
+    "CC BY-NC-SA 4.0限制商业使用；共享改编材料须遵守相应署名与相同方式共享条件。代码和外部模型许可需另行核查。",
+    "数据包不包含上游Avatar生成和筛选过程。工具package_dataset.py只打包已存在的三联图，不能重建论文的数据生成全流程。",
+    "排序99/1文件切分可有身份泄漏；新增身份不交叉清单属于发布版实验设计，不是论文原切分。",
+    "数据筛除了严重、不可恢复的结构失败；公开子集不能证明可以修复严重几何错误、补全完整人体训练数据，或提供可靠Mesh真值。",
+    "论文原方法仍有跨视角伪目标不一致、口腔和半透明区域困难，且画质改善不必然提升时序稳定性。这些不是本次公开数据已经解决的问题。",
+    "本轮未下载大型资产、未运行校验脚本、训练或推理；公共页面和资产元数据可访问不等于逐字节下载验证。未给出新增显存门槛或效果提升数字。"
+  ],
+  "engineering_notes": [
+    "推荐定位：昨日EDGAR的可用性后续，重点是数据访问边界发生变化，避免重新包装原论文方法。",
+    "最低有用动作：读许可、下载命名资产、检查哈希与三联图顺序、检查身份切分；这些先于任何长训练。",
+    "训练输入顺序必须注意：文件从左到右是reference、ground truth、degraded；不能把左侧参考图当输入退化图。",
+    "公开训练命令最小结构：edgar-train --manifest data/CAFCA/manifest_identity_disjoint.json --sapiens <特征权重路径> --poster <完整特征网络路径> --output <新目录>。其余参数按官方README及硬件情况设置，先短跑；本报告未执行。",
+    "建议验收：全部分片哈希通过；总样本数与索引一致；train/validation身份集合不交叉；短跑损失有限、checkpoint可保存恢复；真实留出身份上的表情、身份和跨视角结果单独评估。",
+    "不要把原数据包11月5日的published_at改写为11月7日首发。可用来源日期：2026-11-07 03:23至03:24 UTC官方公开下载说明更新；v1.0资产原发布时间2026-11-05 04:12:47 UTC。",
+    "前期“权重和数据均私有”的结论应更新为“CAFCA-only公开，作者权重与Both仍私有”；前期结论针对当时文档，不应静默改写成当时已公开。"
+  ],
+  "sources": [
+    {
+      "title": "11月7日代码仓库公开下载变更",
+      "url": "https://github.com/kwanyun/edgar-code/commit/18375bc7b8ddd5feaddbc653e77ebb7175860cfe"
+    },
+    {
+      "title": "11月7日数据仓库公开下载说明提交",
+      "url": "https://github.com/kwanyun/edgar-set-cafca/commit/61600af0dc79362df774f275ec8cacc31206144d"
+    },
+    {
+      "title": "公开v1.0发布页",
+      "url": "https://github.com/kwanyun/edgar-set-cafca/releases/tag/v1.0"
+    },
+    {
+      "title": "发布时点与命名资产元数据",
+      "url": "https://api.github.com/repos/kwanyun/edgar-set-cafca/releases/tags/v1.0"
+    },
+    {
+      "title": "固定数据卡：规模、顺序、切分和使用边界",
+      "url": "https://github.com/kwanyun/edgar-set-cafca/blob/61600af0dc79362df774f275ec8cacc31206144d/README.md"
+    },
+    {
+      "title": "固定下载说明：公开与私有范围",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/docs/downloads.md"
+    },
+    {
+      "title": "固定数据集说明：来源与实验边界",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/docs/dataset.md"
+    },
+    {
+      "title": "数据许可",
+      "url": "https://github.com/kwanyun/edgar-set-cafca/blob/61600af0dc79362df774f275ec8cacc31206144d/LICENSE-CAFCA.txt"
+    },
+    {
+      "title": "数据改编署名说明",
+      "url": "https://github.com/kwanyun/edgar-set-cafca/blob/61600af0dc79362df774f275ec8cacc31206144d/NOTICE.md"
+    },
+    {
+      "title": "上游CAFCA数据许可和范围",
+      "url": "https://github.com/syntec-research/Cafca/blob/main/Dataset.md"
+    },
+    {
+      "title": "官方校验解包实现",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/tools/unpack_dataset.py"
+    },
+    {
+      "title": "训练初始化实现",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/src/edgar/train.py"
+    },
+    {
+      "title": "无EDGAR checkpoint的SD-Turbo初始化",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/src/edgar/model.py"
+    },
+    {
+      "title": "作者工程验证范围",
+      "url": "https://github.com/kwanyun/edgar-code/blob/18375bc7b8ddd5feaddbc653e77ebb7175860cfe/VALIDATION.md"
+    },
+    {
+      "title": "原论文全文：数据构建与方法限制",
+      "url": "https://arxiv.org/html/2611.07909v1"
+    }
+  ],
+  "read_scope": "已读11月1日至7日公开日报用于去重；核对EDGAR两个仓库提交历史、公开仓库属性与v1.0全部命名资产元数据；读完数据卡、下载/数据文档、许可、NOTICE、上游CAFCA数据文档和VALIDATION；读训练/模型初始化相关源码、完整解包实现及打包回归测试；重读原论文全文方法、实验与局限。未下载大分片、未查看私有数据/权重、未运行训练或测试。另核对九个既有头像/多视图仓库最新默认分支提交，均未见相对既有报告新增提交；arXiv cs.CV recent和cs.GR new当前最近公告仍为11月6日。 核查时间：2026-11-08T00:02:52Z。"
+}
