@@ -1,0 +1,108 @@
+{
+  "id": "codex-explicit-project-trust",
+  "title": "Codex 预发布版：允许改工作区，不再等于信任项目里的 MCP 启动配置",
+  "problem": "无人值守编码流水线需要允许 Agent 修改工作区，但这与允许仓库提供本机进程启动配置是两种不同授权。Codex 的 exec 路径此前把工作目录作为显式 thread/start 参数交给内嵌 app-server；后者在项目尚无信任决定、权限允许写入该目录等条件下，可以据此授予项目信任。这样，脚本只选择 workspace-write，也可能连带启用项目 .codex/config.toml 里的 MCP 服务器配置。本次改动收紧的是这条非交互启动路径，不是新模型能力，也不是一项通用沙箱隔离方案。",
+  "inputs": "输入包括 codex exec 或 codex review 命令、工作目录、沙箱权限、分层配置、已保存的项目 trusted/untrusted 决定，以及项目内 .codex/config.toml 声明的 MCP 服务器。新增 --trust 是显式持久授信请求；--ephemeral 只控制会话文件是否保存，不能把授信变成一次性。 固定提交源码采用 Apache-2.0 许可证；试用应选择 0.169.0-alpha.3 发布页中匹配系统与架构的预编译包，而非默认稳定版，并使用支持 Codex 的 ChatGPT 账户或按官方说明配置 API key。开源许可不代表云模型调用免费。",
+  "outputs": "没有已有授信且未显式 --trust 时，项目级配置保持禁用，相关 MCP 服务器不因 workspace-write 自动启用，stderr 提示信任边界。有明确授信时，程序将项目 trusted 决定写入实际用户配置文件，再按新配置启动；已显式标记 untrusted 或 --trust 与 --ignore-user-config 同用时直接报错。正常任务输出仍遵循非交互模式的文本或 JSONL 协议。",
+  "pipeline": [
+    {
+      "title": "先区分执行权限与项目配置的可信来源",
+      "explanation": "exec 先发现工作目录并加载用户、项目及受管理配置。配置加载器记录有效项目信任决定和应写入的路径键，保留已禁用的项目层供诊断展示，但不会把其内容并入有效配置。可写目录权限本身不再充当这条 exec 路径的项目授信依据。"
+    },
+    {
+      "title": "只有显式请求才尝试保存授信",
+      "explanation": "传入 --trust 后，exec 重新读取已保存的信任决定。此轮检查去掉命令行里的 projects 覆盖，避免只靠临时覆盖掩盖原有拒绝。已有 trusted 无须重写；已有 untrusted 则失败；尚无决定时用 ConfigEditsBuilder 写入 trusted。--ignore-user-config 会使已保存决定不可检查，因此与 --trust 的组合在启动入口直接拒绝。"
+    },
+    {
+      "title": "通过默认工作目录传递位置，而不传隐含授信信号",
+      "explanation": "关键修改不是再加一段提示词，而是改变 API 参数语义：exec 不再设置 ThreadStartParams.cwd，改把当前目录写入 LoaderOverrides.default_cwd。ConfigBuilder 在显式 cwd 和 fallback_cwd 都缺省时再使用该默认值。app-server 原有条件需要 requested_cwd 存在才可能推导信任，新的 exec 路径因此不会误触发。"
+    },
+    {
+      "title": "按有效配置启动，并把禁用原因暴露给操作者",
+      "explanation": "若发现仍有禁用的项目配置层，exec 会给出明确警告，说明项目配置及 MCP 服务器未启用，以及 --trust 会对当前和未来会话生效、可能允许 MCP 在沙箱外启动命令。项目被授权后，原有 required=true 服务器的启动失败仍会让非交互运行以错误退出，避免静默缺少必需工具。"
+    }
+  ],
+  "mechanism": "这是一处宿主层授权边界修复：位置、文件可写范围、配置可信度分别表达，而不是把它们绑定成同一个布尔判断。底层 app-server 仍保留显式工作目录与有效写权限可推导授信的其他调用路径，因此不能泛称所有入口都变成绝不自动信任。新增的 CLI 授信也不是安全的临时开关：它写入用户配置，即使本次会话使用 --ephemeral，后续同项目运行仍能复用该信任。工程上应把可信配置来源的审核放在模型启动之前。",
+  "results": [
+    {
+      "claim": "这是 11 月 7 日的新增合并，并已进入当天发布的预发布源码，而非 0.167 稳定版的新特性。",
+      "evidence": "PR #60041 于 2026-11-07 02:39:18 UTC 合并，提交为 11ca3f7531866b22b07bd7ed181e814f087b7ee5。0.169.0-alpha.3 于 19:31:41 UTC 发布且 prerelease=true；GitHub compare 返回 ahead、behind_by=0，合并提交是其祖先。alpha.3 的 exec/cli.rs 与该提交文件 blob 相同并包含 pub trust: bool，0.167.0 对应文件不含该字段。",
+      "source": "https://github.com/openai/codex/compare/11ca3f7531866b22b07bd7ed181e814f087b7ee5...rust-v0.169.0-alpha.3"
+    },
+    {
+      "claim": "作者添加了能够区分工作区写权限与项目授信的回归用例。",
+      "evidence": "完整 mcp_required_exit.rs 测试先在用户配置中声明一个必需但不存在的 MCP 可执行程序，断言退出码 1；将相同配置移到项目 .codex/config.toml 后，只给 workspace-write 的运行应成功并显示项目未信任警告。再以 read-only 加 --trust 运行，服务器实际进入初始化路径并报错，说明两种授权已经分离。这里是测试源码表达的预期，不是本次独立运行结果。",
+      "source": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/tests/suite/mcp_required_exit.rs"
+    },
+    {
+      "claim": "持久性和拒绝优先也有明确的回归断言。",
+      "evidence": "上述测试全部运行都携带 --ephemeral；一次 --trust 后，下一次不带 --trust 的运行仍尝试初始化该 MCP。测试随后保存 untrusted，验证 --trust 被拒绝、与 --ignore-user-config 的组合被拒绝，且用户配置没有被这两次失败改写。",
+      "source": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/tests/suite/mcp_required_exit.rs"
+    }
+  ],
+  "limitations": [
+    "截至本轮核查，含该改动的是 0.169.0-alpha.3 预发布版本，稳定版仍为 0.167.0；不应把一般更新到稳定版描述为已获得此修复。已核实发布页提供 macOS、Windows 和 Linux 的构建资产，但未下载或验证二进制运行行为。",
+    "没有模型效果、延迟或安全事件发生率的量化实验。这是参数传递与配置加载修复，不能宣称消除了提示注入或让任意不可信仓库可以安全执行。",
+    "--trust 是持久授信，并包含项目所配置 MCP 命令可能在沙箱外运行的后果。--ephemeral 不会撤销它；不能为了让 CI 通过而对陌生仓库统一添加这个参数。",
+    "范围限于此 PR 修改的非交互入口。底层 app-server 仍有其他显式 cwd 授信逻辑，用户级或已有受信配置中的 MCP 也不等同于被本次默认禁用。",
+    "本轮未编译、未运行测试、未使用真实凭据或仓库执行授信。合并提交的公开检查记录含失败和取消项，未进一步定位原因，不能把新增测试源码或已合并状态写成全部 CI 通过。"
+  ],
+  "engineering_notes": [
+    "适用场景：批量代码审查、定时维护、拉取外部仓库后启动编码 Agent 的 CI。升级后若工具缺失，应先检查项目配置是否因未授信而禁用，不要先扩大沙箱权限。",
+    "最小验证优先复用官方模拟服务测试，在一次性测试目录和隔离 CODEX_HOME 中运行，不使用真实用户配置。构造本机自有空 Git 仓库，把 required=true 的 MCP 命令设为明确不存在的测试名称，分别观察未授信加 workspace-write、授信加 read-only、下一次不带授信、显式 untrusted、ignore-user-config 冲突五种结果。此方案是建议，尚未执行。",
+    "验证持久行为只应在已检查内容的自建测试仓库中进行，并在隔离容器或可丢弃账户完成；不要在真实不可信项目尝试 --trust，也不要用生产凭据。使用 --ephemeral 不能替代隔离用户配置。",
+    "验收应同时记录退出码、stderr、实际启动的 MCP 进程、授信前后的用户配置差异及第二次运行行为。不要仅以模型最终回复正常作为权限边界生效的证据。",
+    "这与 11 月 7 日日报的失败响应 token 计数修复是独立增量：昨日关注长任务的上下文预算，本条关注非交互启动时如何避免隐含持久授信。"
+  ],
+  "sources": [
+    {
+      "title": "PR #60041：完整说明及代码差异",
+      "url": "https://github.com/openai/codex/pull/60041"
+    },
+    {
+      "title": "0.169.0-alpha.3 发布记录与资产",
+      "url": "https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.3"
+    },
+    {
+      "title": "固定合并提交至预发布 tag 的祖先关系",
+      "url": "https://github.com/openai/codex/compare/11ca3f7531866b22b07bd7ed181e814f087b7ee5...rust-v0.169.0-alpha.3"
+    },
+    {
+      "title": "exec 授信检查、持久写入和默认目录传递",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/src/lib.rs#L548-L580"
+    },
+    {
+      "title": "非交互 CLI 参数的持久授信说明",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/src/cli.rs"
+    },
+    {
+      "title": "完整 MCP 授信回归测试",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/exec/tests/suite/mcp_required_exit.rs"
+    },
+    {
+      "title": "项目配置发现与有效信任决定",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/config/src/loader/mod.rs#L342-L449"
+    },
+    {
+      "title": "底层 app-server 的显式 cwd 授信条件",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/app-server/src/request_processors/thread_processor.rs#L1490-L1555"
+    },
+    {
+      "title": "配置层加载器的正式源码说明",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/codex-rs/config/src/loader/README.md"
+    },
+    {
+      "title": "合并点公开 postmerge 检查，含失败项",
+      "url": "https://github.com/openai/codex/actions/runs/42330306962"
+    },
+    {
+      "title": "固定提交源码许可证",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/LICENSE"
+    },
+    {
+      "title": "安装与账户前提",
+      "url": "https://github.com/openai/codex/blob/11ca3f7531866b22b07bd7ed181e814f087b7ee5/README.md"
+    }
+  ],
+  "read_scope": "已读 PR #60041 全部说明和七个文件的完整变更补丁；完整阅读固定提交的 exec/src/cli.rs、exec/tests/suite/mcp_required_exit.rs、config/src/project_trust.rs、config/src/loader/README.md；进一步阅读 exec/src/lib.rs 260–830 行启动流程、配置加载器 330–465 行及 thread_processor.rs 1483–1592 行的授信链路。核对发布 API、全部发布资产名称、合并时间、提交祖先关系和 alpha/stable CLI 文件差异；读取合并点公开检查状态但未诊断失败日志。非交互在线文档仅核查相关用法段落，不声称通读整个仓库或执行回归。 核查时间：2026-11-08T00:02:52Z。"
+}
