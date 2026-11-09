@@ -1,0 +1,91 @@
+{
+  "id": "docling-jats-license-funding-retention",
+  "title": "Docling 保留论文许可与资助声明，但默认 Markdown 仍不包含",
+  "problem": "文献采集链路若只保留正文，版权、许可与资助说明可能在转换时消失。Docling 原有 JATS 元数据解析读取标题、作者及摘要，没有遍历 article-meta 下的 permissions 和 funding-group 声明，所以这些文本及其链接连完整文档 JSON 也拿不到。PR #4866 的增量是保留这些原始声明，同时避免把它们默认混入论文正文。这是入库证据保真维护，不是新的 RAG 算法或自动合规决策。",
+  "inputs": "输入为可被 Docling JATS 后端读取的 XML 文档，重点是元数据中的 permissions/copyright-statement、permissions/license/license-p 和 funding-group/funding-statement。声明内的 ext-link、上标等内联格式沿用既有线性遍历器处理。代码的 _find_metadata 会优先选择首个 article-meta，未找到时选择 book-part-meta；这不代表已对所有嵌套子文章的声明逐一抽取。",
+  "outputs": "输出仍为 DoclingDocument。新增声明文本和多段内联组标记为 ContentLayer.FURNITURE，可通过 doc.texts、export_to_dict() 或显式包含该层的导出读取。默认 Markdown 仍只输出正文，测试明确断言许可与资助声明不会出现在默认 Markdown 中。若要同时导出，可传 included_content_layers={ContentLayer.BODY, ContentLayer.FURNITURE}；声明位于文章正文之后。",
+  "pipeline": [
+    {
+      "title": "定位元数据并按来源顺序收集声明",
+      "explanation": "_parse_metadata 新增 statements 字段，调用 _parse_statements。后者使用 XPath 联合选择版权声明、许可段落和资助声明，并保留为 XML 节点，直到输出时再遍历；找不到元数据则返回空列表。它没有把所有 permissions 或 funding-group 内容无差别扁平化。"
+    },
+    {
+      "title": "沿用内联遍历以保留链接和格式",
+      "explanation": "_add_statements 对每条声明调用 _walk_linear，再交给 _emit_inline。ext-link 的目标、上标等格式随文本片段保留，因此许可文字中的真实链接不会因为只提取纯文本而消失。只有 license 元素自身的 xlink:href、没有对应 ext-link 文本时，仍不在本次覆盖范围内。"
+    },
+    {
+      "title": "把文本和组合节点都归入附属内容层",
+      "explanation": "_emit_inline 新增可选 content_layer 参数；声明路径传入 FURNITURE，多片段声明创建的 inline group 和每个 text item 都使用同一层。已有调用不传该参数，原正文行为保持不变。这样可以按层选择，而不依赖从正文里猜测哪些段落是版权或资助信息。"
+    },
+    {
+      "title": "在原有内容之后追加，保持原项目索引",
+      "explanation": "convert 在完成后置内容和子文章后追加声明，挂在文章根标题下。四份 JSON 参考数据仅新增声明相关项，既有正文项位置不被重排。声明加入文档树，不意味着默认正文导出或默认分块已经包含它们。"
+    },
+    {
+      "title": "在入库应用中显式保存合规证据",
+      "explanation": "工程建议是同时保存完整 JSON 与正文表示，或另外保存 furniture 层声明，并与原始 XML、来源地址和采集时间关联。检索正文可以继续维持原分块方式；许可审查读取附属层。这一应用分层是基于补丁机制的建议，并非项目新增的授权审批功能。"
+    }
+  ],
+  "mechanism": "核心机制是把“正文内容”和“描述文章的声明”分层保存：先把原来被忽略的 XML 声明节点纳入解析，再在输出端明确标记为 furniture。与把版权段落直接追加到正文相比，调用方可保留原阅读顺序及正文导出，同时仍能获取原始使用条件证据。这里的层标签只决定内容组织，不表示内容已验证合法，也不替代许可版本识别、用途匹配或人工判断。此修复与11月8日报的 MinerU URL 下载安全边界、11月7日报的 RAGFlow PDF 表格行结构修复均为不同项目与不同输入风险。",
+  "results": [
+    {
+      "claim": "本日实质增量是合并到主分支，不是稳定包首次发布。",
+      "evidence": "官方 PR 元数据给出创建时间2026-10-16 07:28:58 UTC、合并时间2026-11-08 08:34:47 UTC、目标 main 和合并提交896f2fd973d0b0b43b2adfd73e2f51c75210ddd2。最新正式版 v2.149.0 于11月8日08:25:48 UTC发布；官方 compare 返回修复提交相对该 tag 为 ahead 1、behind 0，唯一新增提交就是本修复。因此 v2.149.0 不包含它。",
+      "source": "https://github.com/docling-project/docling/compare/v2.149.0...896f2fd973d0b0b43b2adfd73e2f51c75210ddd2"
+    },
+    {
+      "claim": "固定提交包含两项可执行回归，覆盖声明内容、内联链接、顺序和默认导出边界。",
+      "evidence": "test_jats_license_and_funding_statements_are_furniture 断言许可链接保留、默认 Markdown 包含摘要但不含声明、显式加入 furniture 后正文先于声明；test_jats_copyright_and_each_license_paragraph_are_kept_in_order 断言版权、两个许可段和两项资助声明按顺序保留，SCOAP 上标格式不丢失。当前合并版测试在 tests/test_backend_jats.py，而不是 PR 较早描述中的独立 metadata 测试文件。本轮读取断言，没有执行。",
+      "source": "https://github.com/docling-project/docling/blob/896f2fd973d0b0b43b2adfd73e2f51c75210ddd2/tests/test_backend_jats.py"
+    },
+    {
+      "claim": "参考数据变化局限于四份 JATS JSON 的附属内容新增，未据此声称通用抽取准确率改善。",
+      "evidence": "读取 PR 变更文件清单与补丁：elife-56337、pntd.0008301、pone.0234687、ptag100 的 JSON 分别增加75、120、182、126行，均无删除，共503行。变更清单没有 Markdown 或纯文本参考输出修改。作者报告过155项相关测试通过，但该说明关联较早环境和测试布局，不能冒充本次独立运行或合并提交的完整测试结果。",
+      "source": "https://github.com/docling-project/docling/pull/4866"
+    }
+  ],
+  "limitations": [
+    "截至2026-11-09 00:07 UTC，只核实主分支合并及固定源码，最新正式 release v2.149.0 不含此修复。不能建议只升级到2.149.0就获得声明保留。",
+    "本轮未安装 Docling、运行测试、转换真实论文或衡量检索指标；没有独立实验结果。作者局部测试说明不等于完整 ML 测试、所有格式兼容性或生产部署验证。",
+    "只保存默认 Markdown 仍会漏掉这些声明。调用方必须保存完整文档对象、JSON，或显式包含 furniture 层；仅升级解析代码而不改下游存储可能没有可见收益。",
+    "license 自身的 xlink:href、ali:license_ref，以及 award-group、funding-source、award-id 等结构化标识不在此次抽取范围内。只有声明里的 ext-link 链接随文本保留。",
+    "作者明确指出 license-p 下的列表、公式、图片或表格等块级子节点仍可能作为 body 内容输出，现有四份参考文档没有覆盖这种情况。",
+    "源码只从 _find_metadata 选中的元数据节点收集声明，不能据此声称支持所有子文章和任意 JATS 变体的完整许可传播。",
+    "保留许可原文不等于获得使用授权。文档可公开下载、标记为开放获取或包含许可链接，都不能自动推出可商用、可训练或可再分发；站点条款、授权与具体使用限制仍需单独判断。"
+  ],
+  "engineering_notes": [
+    "最小试用先在隔离环境按仓库说明准备 JATS 测试依赖，固定合并提交896f2fd973d0b0b43b2adfd73e2f51c75210ddd2，并与v2.149.0对照；不要直接替换生产环境。",
+    "可运行 python -m pytest tests/test_backend_jats.py -k 'license_and_funding_statements_are_furniture or copyright_and_each_license_paragraph_are_kept_in_order'。这是基于合并版测试名的复现建议，本轮没有运行。",
+    "准备一份自有或获授权的小型 JATS XML，包含 copyright-statement、带 ext-link 的 license-p、funding-statement 和普通正文。分别检查 doc.texts、export_to_dict()、默认 export_to_markdown() 与 included_content_layers={ContentLayer.BODY, ContentLayer.FURNITURE} 的差异。",
+    "增加反例：许可地址仅存在于 license 的 xlink:href、只有 ali:license_ref、只有 award-group、license-p 内含列表。把未覆盖或错误分层记录为缺口，不把缺失字段解释成“无限制”。",
+    "建议将许可声明与原始 XML 的内容哈希、来源地址、采集时间、解析器提交及导出层配置一起保存。正文检索和许可审查分别读取合适表示，避免证据在转换、分块或存储中再次丢失。",
+    "验收先看许可链接、声明顺序、层标记和默认正文是否保持，再看下游检索是否需要额外配置；不能用这次补丁推导准确率、召回率或吞吐提升。"
+  ],
+  "sources": [
+    {
+      "title": "PR #4866：JATS 声明保留、范围与作者测试说明",
+      "url": "https://github.com/docling-project/docling/pull/4866"
+    },
+    {
+      "title": "固定合并提交：JATS 解析实现",
+      "url": "https://github.com/docling-project/docling/blob/896f2fd973d0b0b43b2adfd73e2f51c75210ddd2/docling/backend/xml/jats_backend.py"
+    },
+    {
+      "title": "固定合并提交：许可、资助、顺序与默认导出回归",
+      "url": "https://github.com/docling-project/docling/blob/896f2fd973d0b0b43b2adfd73e2f51c75210ddd2/tests/test_backend_jats.py"
+    },
+    {
+      "title": "v2.149.0 到修复提交：仅向前一个提交",
+      "url": "https://github.com/docling-project/docling/compare/v2.149.0...896f2fd973d0b0b43b2adfd73e2f51c75210ddd2"
+    },
+    {
+      "title": "v2.149.0 正式发布记录",
+      "url": "https://github.com/docling-project/docling/releases/tag/v2.149.0"
+    },
+    {
+      "title": "PR 精确创建及合并时间元数据",
+      "url": "https://api.github.com/repos/docling-project/docling/pulls/4866"
+    }
+  ],
+  "read_scope": "已读取11月1至8日全部日报JSON并按条目及覆盖记录去重；打开Docling PR #4866全文、官方PR精确时间元数据、全部变更文件列表与相关补丁，定向研读固定合并提交中的元数据选择、声明收集、内联输出、线性遍历以及两项新增回归断言；读取四份参考JSON的增量补丁、v2.149.0官方release元数据及说明，并核对tag到合并提交的祖先关系。PR较早测试说明与合并版测试布局不同，已明确区分。未运行代码、完整测试或文档转换，未把自动审查评论作为独立实验。核查时间：2026-11-09T00:07:52Z。"
+}
