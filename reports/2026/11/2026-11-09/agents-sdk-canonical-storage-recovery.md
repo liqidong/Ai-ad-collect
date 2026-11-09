@@ -1,0 +1,100 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-09
+---
+
+# Agents SDK alpha.7：先持久记录工具意图，再执行；未知副作用必须核对后恢复
+
+本文区分原始来源事实、工程建议和未验证事项；未独立运行实验。
+
+## 核心问题
+
+长任务 Agent 在执行工具后、保存结果前崩溃，会留下危险的不确定窗口：业务动作可能已经发生，但会话没有回执。仅保存聊天文本或重放整个任务，可能重复下单、发信或写入数据。11月8日发布的 OpenAI Agents SDK 0.24.0-alpha.7，把应用自有存储接入原生 Session，并在恢复时拒绝跳过未知工具结果。本条重点是持久化协议与恢复边界，不是长期语义记忆、更强模型或通用“恰好一次执行”。相关实现11月5日已合入预览开发分支，今日增量是进入可下载的alpha.7发行包。
+
+## 输入与前提
+
+输入是当前应用声明的 Agent 指令、自动执行的 Python 函数工具、当前凭据和上下文，外加 CustomStorage(SessionStore后端)。参考后端 SQLiteSessionStore 接收 pathlib.Path 指向的私有本地数据库；再次打开还要提供原 session.id。后端接收带原始线程、轮次、调用身份的完整不透明快照，以及 writer token、expected_revision、write_id。若要恢复未知调用，还需来自业务系统的真实结果。alpha.7轮子公开下载、源码MIT许可，真实模型调用需要有效账户凭据并可能收费；测试可使用官方模拟Responses服务，不必调用真实模型。
+
+## 输出
+
+正常输出包括模型答案、原生有序会话历史、原始工具调用与实际结果回执，保留Session/turn/call身份，支持下一进程继续会话。存在尚无结果的根工具调用时，不返回可执行的Session，而是在启动Core及新模型请求前抛出 LocalRecoveryRequired，并提供calls、turns、items供检查。CustomStorage.reconcile()只向原调用补记已核实结果，不运行工具，不覆盖已有回执。存储、flush或释放错误会继续显式暴露，不自动切换到另一个后端。
+
+## 关键机制
+
+这条链路把模型历史、存储耐久性与业务副作用拆开管理。writer token防旧持有者写入，revision检查防历史覆盖，稳定write_id处理提交确认丢失，意图和结果回执界定执行前后边界，恢复门禁阻止在信息不全时盲目继续。它并没有把外部业务系统与会话数据库纳入同一原子事务，因此不能保证所有副作用恰好一次：模型在后续轮次仍可能以新call ID提出同一业务动作。应用必须跨调用、跨进程保留业务幂等键并自行去重。与仅保存对话摘要不同，关键保证来自宿主存储协议和运行时屏障，而非提示词。
+
+## 逐步流程
+
+### 1. 限定功能组合，再取得唯一写入权
+
+应用在打开Session时选择CustomStorage。当前预览先拒绝环境执行、原生工具、子Agent、规划和手工工具等尚无完整持久化回执的组合。随后调用后端acquire取得唯一writer token，在该所有权下读历史并检查原生格式和版本。参考SQLite后端用每个Session的POSIX文件锁加数据库token；进程退出释放OS锁，新持有者替换token，旧写入者不能继续提交。
+
+### 2. 用版本检查与稳定写入身份保存完整历史
+
+每次规范历史变化产生完整快照，commit必须原子检查writer token和expected_revision，再保存新revision、write_id与payload。原生适配层用writer token加递增revision形成稳定write_id。同一write_id与相同payload的重复提交必须幂等。只有后端完成持久提交，SDK才确认写入；缓存、检索索引和遥测不是权威历史。
+
+### 3. 先提交工具意图，再允许副作用发生
+
+运行时在分发工具前commit并flush调用意图；若这一阶段失败，不启动受影响工具。Python回调完成后，其实际结果必须先提交，才能向原生执行器返回并进入依赖它的模型步骤。并行工具中较早完成的结果也应及时记账，不必等待更早启动但尚未结束的兄弟调用。结果写入失败不能撤销已经发生的外部动作，也不能收回已启动的其他工具，因此后续恢复必须区分“已知回执”与“未知结果”。
+
+### 4. 提交确认丢失时，只重试同一笔存储写入
+
+若commit抛错，适配层仍在原writer所有权下读回精确payload；内容完全一致后，再以同一个write_id与相同payload幂等提交，并要求获得成功的持久确认。仅仅读得到数据不等于已经持久。读回不一致或第二次确认失败时，将Session置为失败并停止依赖工作。这一恢复重试的是存储提交，不是业务工具。
+
+### 5. 重启先检查未知调用，不能靠重试绕过
+
+重开同一数据库和session.id时，在唯一writer租约下检查保留的根调用；只有意图、没有结果回执就抛出LocalRecoveryRequired。错误对象携带原thread/turn/call ID、工具名和参数，即使进程在应用写业务日志之前停止，也能定位未决调用。重复打开仍会被阻断，不会自动发新模型请求或重放工具。业务日志没有记录本身不能证明副作用未发生。
+
+### 6. 外部核对完成后补回执，再开启新工作
+
+先关闭失败Session，并按需要完成资源清理。应用用原调用身份及稳定业务幂等键查询真实系统，核实成功、失败或确实未执行后，调用await storage.reconcile(session_id, turn_id=原ID, call_id=原ID, output=真实字符串或ToolOutput)。该操作重新取得独占所有权并记录原调用结果，不调用工具。之后用当前工具定义、凭据和上下文重开；如果无法确认结果，则保持阻断。若补记后的释放失败，只重试get_cleanup(error)返回对象的aclose()，不要重复业务动作或把清理失败当作补记未发生。
+
+## 来源结果与证据
+
+- **11月8日可下载的预览包已包含此能力，但它不是当天首次合并，也不是稳定版能力。**：发布API记录v0.24.0-alpha.7在2026-11-08 07:05:11 UTC发布，prerelease=true，提供三个平台轮子及SHA256SUMS。tag解析到c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9。PR #5514在11月5日08:21:29 UTC合入feat/codex-harness；GitHub compare确认发行提交位于其后72个提交、behind_by=0。alpha.7发布说明把SessionStore、SQLiteSessionStore、CustomStorage列为新增。 [原始来源](https://github.com/openai/openai-agents-python/releases/tag/v0.24.0-alpha.7)
+- **官方回归覆盖跨进程恢复及当前绑定，而不是把旧凭据或工具代码存入会话。**：test_custom_store_reopens_history_with_current_bindings用两个独立进程打开同一Session，检查保留首轮工具调用和结果、原call ID和递增历史revision；第二进程请求使用新凭据标记，第二次工具回调来自新应用绑定。模型服务为脚本化Responses夹具，业务效果为测试文件记录，非生产任务成功率实验。 [原始来源](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/tests/test_custom_storage_durability.py)
+- **测试明确区分意图写入失败与结果写入失败。**：test_failed_commits_stop_effects_and_dependent_model把intent-fail和stale场景的副作用次数断言为0，把result-fail断言为1；三者均不进入第二次模型请求。结果缺失场景连续两次重开仍失败，核对并reconcile后才允许新工作。这里是已阅读的测试断言，不是本轮独立运行结果。 [原始来源](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/tests/test_custom_storage_durability.py)
+- **未知副作用、丢失提交确认与已记录回执有不同恢复路径。**：未知效果后进程终止测试要求每次重开都阻断且不重复效果；意图已持久但业务日志尚未开始的崩溃也能返回未决call信息。丢失ACK测试只保留一次工具效果和一份调用/结果；仅可读却不能得到持久确认时仍使原Session失败。已持久回执后杀进程的用例，则要求重开沿用回执、不重放回调。 [原始来源](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/tests/test_custom_storage_durability.py)
+- **发行源码测试与轮子安装检查公开显示成功，但不等于所有平台支持该存储后端。**：Tests运行42453125392针对发行源码c27b24c，最终结论success。另一个安装验证运行42457339996六个job成功，矩阵为CPython 3.10/3.14及Linux、Apple Silicon macOS、Windows。后者验证安装；SQLiteSessionStore源码明确要求POSIX文件锁，因此Windows轮子可安装不代表这一参考后端可运行。本轮未安装轮子、未执行回归。 [原始来源](https://github.com/openai/openai-agents-python/actions/runs/42457339996)
+
+## 局限与未知
+
+- 这是GitHub预发布轮子，原生预览不在PyPI提供；直接pip install openai-agents可能安装另一个旧运行时，不能据此确认获得本文API。安装文档在发行快照中仍写alpha.6，必须以alpha.7发布资产、tag及同版示例为准，不能复制旧轮子命令。
+- CustomStorage首期只支持根Session和自动Python工具，不支持MCP、WebSearch等原生工具、Environment、子Agent、goals/checklists、生成代码执行或manual工具；不能与portable SessionState混用，也不支持线程列表、归档、fork和本地rollout路径读取。
+- SQLite参考后端只支持单宿主、本地POSIX文件系统；不支持Windows、网络文件系统和跨主机写入。进程崩溃后的耐久性与主机损坏后的耐久性不同，后者仍依赖磁盘和文件系统正确兑现fsync。
+- 每次规范历史更新都重写完整快照，官方没有公布长历史吞吐、恢复延迟或存储放大量的性能基准；此设计优先保证边界清楚，不能直接推断高并发成本。
+- 快照含指令及工具数据，只能加载可信应用历史。数据库、sidecar和锁文件须归当前用户所有且仅本人可访问，祖先目录和符号链接目标也必须可信；不接受硬链接数据库。应用仍负责加密、访问控制、保留期和备份。
+- 快照检查原生schema、Python SDK family及固定Codex revision，但这些检查不证明任意SDK升级或Python/JavaScript互通。保留匹配轮子，不要编辑不透明快照绕过版本检查。
+- reconcile不验证外部业务事实，不撤销动作，也不是全局恰好一次执行。一个新的call ID仍可能对应重复业务请求；无法查清结果时必须停住，而不是编造“未执行”回执。
+- 独立核查仅覆盖发布信息、实现与测试源码、公开CI状态，没有运行真实模型、数据库崩溃演练、主机断电测试或线上负载验证。不能把模拟用例通过解释为复杂Agent任务成功率提升。
+
+## 工程建议，未实施
+
+- 最小试用第1步：选用Linux x86_64/glibc≥2.39或Apple Silicon/macOS≥11，使用标准CPython 3.10–3.14及隔离虚拟环境；从alpha.7发布页下载对应0.24.0a7轮子和SHA256SUMS并核对，再执行python -m pip install ./已核对轮子.whl。不要使用alpha.6安装命令或从源码目录误导入未安装的另一版本。轮子包含原生运行时，无须自行编译Rust。
+- 最小试用第2步：用python -c "from importlib.metadata import version; import agents._native; print(version('openai-agents'))"确认0.24.0a7。取同一v0.24.0-alpha.7源码中的examples/codex/canonical_storage/main.py；该示例仅查询虚构订单，不产生真实订单副作用。通过正常环境配置提供OPENAI_API_KEY，并确认示例指定模型在账户中可用；不将凭据写入数据库、报告或脚本仓库。
+- 最小试用第3步：从同版源码根目录运行python examples/codex/canonical_storage/main.py ./conversation.sqlite，记录输出的Session ID并等进程关闭。第二个进程执行python examples/codex/canonical_storage/main.py ./conversation.sqlite --resume SESSION_ID --prompt 'What did you find?'。验收同一Session继续读取先前工具结果，而不是仅凭最终答案听起来正确；这只是正常关停后恢复示例，不能代替崩溃恢复测试。
+- 最小试用第4步：接入任何真实写操作前，先在隔离测试目录复用packages/codex/tests/test_custom_storage_durability.py的脚本化Responses夹具，对intent-fail、result-fail、ACK丢失、进程终止、争抢writer及reconcile后的恢复逐项检查；统计模型请求数、原call ID、回执数和业务效果计数。本轮提供的是验证方案，没有执行这些测试。
+- 上线前将业务幂等键放到外部动作本身，建立人工或确定性核对接口。把“已有意图但无回执”与“从未调用”作为不同状态；存储恢复与业务核对不能只靠一个自动重试开关。
+- 升级现有alpha.6应用还要审查alpha.7其他破坏性或默认值变化，包括Environment写策略、MCP approval_mode命名和子步骤回调签名；本文不把这些功能与CustomStorage组合，后者当前拒绝其中多种组合。
+- 与11月7日报的Codex上下文计数及11月8日报的项目信任修复不同，本条是应用自有持久存储与不确定副作用恢复。无需重复旧压缩、权限或Agent记忆基线。
+
+## 实际阅读范围
+
+已核对11月1–8日报条目，完整阅读alpha.7发布说明、PR #5514和#5502说明、固定发行提交的canonical_storage示例README及main.py、安装与快速开始文档。阅读Python存储实现125–360行及协议说明、Rust提交确认处理160–235行；定向阅读跨进程恢复、意图/结果失败、ACK丢失、未知效果、意图先于业务日志、已知回执及类型化reconcile测试，检查其余测试名称，未声称通读整个仓库。核对tag解析、PR到发行提交祖先关系、发布资产和两次公开Actions状态及安装job矩阵。未安装、未独立运行测试，未读公开CI完整日志。核查时间：2026-11-09T00:08:16Z。
+
+## 原始来源
+
+- [alpha.7发布说明、发布时间与公开轮子](https://github.com/openai/openai-agents-python/releases/tag/v0.24.0-alpha.7)
+- [PR #5514：应用自有SessionStore，11月5日合入预览分支](https://github.com/openai/openai-agents-python/pull/5514)
+- [固定发行提交：后端协议与恢复流程](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/examples/codex/canonical_storage/README.md)
+- [固定发行提交：SQLite适配器与reconcile接口](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/src/_agents_codex/canonical_storage.py)
+- [固定发行提交：原生存储桥及丢失确认处理](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/rust/canonical_storage.rs)
+- [固定发行提交：跨进程与故障注入回归](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/tests/test_custom_storage_durability.py)
+- [固定发行提交：文件权限、writer排他及SQLite回归](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/packages/codex/tests/test_canonical_storage.py)
+- [最小跨进程订单查询示例](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/examples/codex/canonical_storage/main.py)
+- [发行源码公开Tests运行](https://github.com/openai/openai-agents-python/actions/runs/42453125392)
+- [六平台/版本组合安装验证](https://github.com/openai/openai-agents-python/actions/runs/42457339996)
+- [固定发行提交：安装要求及文档版本注意事项](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/docs/sdk/installation.md)
+- [快速开始与模型调用费用前提](https://github.com/openai/openai-agents-python/blob/c27b24cc6c4fa7e89ab54fa9f795ef4f2d4d5fb9/docs/sdk/index.md)
