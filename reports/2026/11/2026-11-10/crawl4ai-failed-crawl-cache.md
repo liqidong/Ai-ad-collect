@@ -1,0 +1,91 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-10
+verified_at: 2026-11-10T00:10:33Z
+---
+
+# Crawl4AI：失败抓取不再污染缓存，仍需另验HTTP与抽取质量
+
+来源时点：PR #2519于2026-11-09 15:07:06 UTC合入develop（6380cb6d0e4477d47a05979edcb1a00aced708bc）；所核验最新正式版v0.9.5发布于2026-10-14。
+
+开放状态：11月9日develop合并；未正式发行；代码及离线回归审阅
+
+核查时间：2026-11-10T00:10:33Z
+
+## 阅读范围与证据等级
+
+已读官方PR全文、两个生产文件完整变更和186行新增测试全文；未运行。
+
+## 核心问题
+
+开启缓存后，失败抓取没有markdown，空MarkdownGenerationResult缺必填字段，缓存写入又抛验证异常，掩盖真实网络错误。更严重的是失败结果若落库，回放路径把它当成功，污染后续采集并可能阻挡该URL重新缓存。
+
+## 输入
+
+arun接收URL、CacheMode与抓取配置；缓存读路径接收旧CrawlResult，写路径接收本次结果的success、markdown与原始错误信息。测试使用本地HTTP服务器与临时缓存，不涉及第三方数据。
+
+## 输出
+
+失败结果保留真实抓取错误、不写常规缓存；已有success=False行被视作miss并重新抓取。成功且markdown非None时才允许常规写入；后备MarkdownGenerationResult具有必需的三个文本字段。
+
+## 逐步流程
+
+### 1. 先拒绝失败旧缓存
+
+读缓存后先检查cached_result.success；False立即置空，继续真实抓取。
+
+### 2. 只缓存满足条件的抓取结果
+
+写缓存同时要求策略允许、无有效旧缓存、crawl_result.success为真、markdown不为None。预抓取有HTML但无markdown，因此不会抢占后续完整抓取缓存。
+
+### 3. 显式构造合法后备结果
+
+底层acache_url显式提供raw_markdown、markdown_with_citations、references_markdown三个空字符串，消除后备序列化的Pydantic异常。这个底层函数仍可被直接调用写入失败行，正常arun读路径负责忽略旧失败记录。
+
+## 关键机制
+
+相对只修补空Markdown构造异常，本次同时修复读写两端。写端阻断失败或未完成结果，读端识别历史失败行并重抓，避免把失败持久化后重新包装成成功。后备对象显式填充必需字段而不修改模型字段约束，防止全局放宽校验后让不完整旧记录变成有效命中。HTTP状态与抽取质量仍是不同信号。
+
+## 原始来源报告的结果与证据
+
+### 9项离线回归覆盖失败缓存污染
+
+9个新增离线测试使用本地HTTP服务和临时缓存：作者报告修复前5失败4通过，修复后9全通过。
+
+[原始证据](https://github.com/unclecode/crawl4ai/pull/2519)
+
+### 缓存恢复与预抓取路径有明确测试
+
+测试覆盖闭端口真实错误、失败后成功可缓存、WRITE_ONLY失败不覆盖好的缓存、blocked页面连续访问不变成功、prefetch后全量请求miss、正常二次hit、旧失败行重抓后可hit。
+
+[原始证据](https://github.com/unclecode/crawl4ai/blob/6380cb6d0e4477d47a05979edcb1a00aced708bc/tests/test_issue_2490_cache_failed_crawl.py)
+
+### 广泛回归有既存失败，不能称全套通过
+
+作者报告真实浏览器闭端口在ENABLED下保留与DISABLED相同的net::ERR_CONNECTION_REFUSED。既有356测试来自28文件，前后共同8失败；另有1个实时站点计时波动。付费LLM和会在import退出的cloud_bugs_batch未跑。
+
+[原始证据](https://github.com/unclecode/crawl4ai/pull/2519)
+
+## 限制与未知
+
+- success定义未改变：带HTML的404/500仍可能success=True并缓存。
+- markdown生成错误、LLM抽取失败仍可能被视为成功并缓存，另由issue #2520跟踪。不能据此声称已保证语料质量或拒绝页识别。
+- 不改变robots、许可、个人数据处理或授权策略；建议只对已授权来源试用。
+- 仅合入develop，当前核验的正式release v0.9.5不含；本轮未运行代码。底层acache_url仍能被直接调用写失败行，不能把arun保护等同为数据库约束。
+
+## 工程建议（未实测）
+
+- 2026-11-09T15:07:06Z合并develop，commit 6380cb6d0e4477d47a05979edcb1a00aced708bc。最新release仍v0.9.5（10/14），不把develop改动写为正式版已上线。
+- 隔离环境锁定commit，使用本地服务而非生产站点：先关闭端口抓取，确认真实连接失败且无缓存；开启服务抓成功、关闭后确认hit；另测prefetch后完整抓取仍miss。补充自有404/500与LLM失败验收，因为本PR不解决这些质量信号。
+- 若采集流水线用CacheMode.ENABLED，这项能避免把一次失败固化为后续成功语料，适合加入缓存回归测试；优先于仅渲染方向修复的维护项。
+- 入库验收建议把网络完成、HTTP状态、正文可用、抽取完成分成不同状态，避免用单个success覆盖所有质量判断；这是工程建议，非本PR已实现功能。
+
+## 原始来源
+
+- [PR #2519：缺陷、修复范围与作者测试结果](https://github.com/unclecode/crawl4ai/pull/2519)
+- [固定合并提交：缓存回归测试](https://github.com/unclecode/crawl4ai/blob/6380cb6d0e4477d47a05979edcb1a00aced708bc/tests/test_issue_2490_cache_failed_crawl.py)
+- [固定合并提交：抓取与缓存命中逻辑](https://github.com/unclecode/crawl4ai/blob/6380cb6d0e4477d47a05979edcb1a00aced708bc/crawl4ai/async_webcrawler.py)
+- [固定合并提交：缓存序列化实现](https://github.com/unclecode/crawl4ai/blob/6380cb6d0e4477d47a05979edcb1a00aced708bc/crawl4ai/async_database.py)
+- [v0.9.5正式发布记录](https://github.com/unclecode/crawl4ai/releases/tag/v0.9.5)
