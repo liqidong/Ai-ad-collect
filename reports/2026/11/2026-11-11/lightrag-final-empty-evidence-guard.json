@@ -1,0 +1,112 @@
+{
+  "id": "lightrag-final-empty-evidence-guard",
+  "title": "LightRAG最终证据门槛：先确认过滤后仍有内容，再进入回答与缓存",
+  "problem": "初始检索非空不保证回答阶段仍有证据。用户配置重排阈值后，候选可能全部低于门槛；扣除提示词与安全余量后，token预算也可能容不下任何chunk。旧naive路径仍构造格式化空上下文、查询答案缓存并调用回答模型；旧mix路径即使结构化数据已标为failure，仍可能附带模型答案。此次修复把最后阶段的空结果重新接回已有None/no_results契约。",
+  "inputs": "查询文本、查询模式及QueryParam，例如naive或mix、enable_rerank、max_total_tokens和上下文/提示预览开关。\n\n初始向量候选、图实体与关系，以及重排器、tokenizer、系统提示模板和答案缓存。\n\n最小离线复现使用一个固定候选chunk，重排得分0.1、显式min_rerank_score=0.5；默认阈值仍为0.0。",
+  "outputs": "最终全部证据为空时，aquery_llm返回status=failure、metadata.failure_reason=no_results、预置失败文本、llm_generated=false，且无流式迭代器。\n\naquery_data在同一情况下返回failure及空data；上下文和提示预览也不能把空格式包装成成功结果。\n\n若仍有可用chunk，或图查询仍有实体/关系，则维持正常回答路径。",
+  "pipeline": [
+    {
+      "title": "初始检索并非最终判定",
+      "explanation": "图查询先完成关键词提取、图/向量检索；naive进行向量检索。初始无结果已有早退，本次不改变召回算法、重排分数或默认阈值。"
+    },
+    {
+      "title": "按实际预算筛选证据",
+      "explanation": "系统提示、查询和预留开销会占用预算。process_chunks_unified继续执行原有重排及截断；图路径还进行实体/关系截断和chunk合并，最终由_build_context_str汇总证据。"
+    },
+    {
+      "title": "在共享边界传播空结果",
+      "explanation": "naive_query在processed_chunks为空时立即返回None；图路径_build_query_context在_build_context_str返回空context后也返回None，不再将空字符串包装成QueryContextResult。图路径既有的全空检查同时看实体、关系和chunks，避免误拒绝仅图证据。"
+    },
+    {
+      "title": "统一失败响应并阻止后续工作",
+      "explanation": "kg_query已能把None向上传递。公开aquery_llm/aquery_data复用原有no_results转换，早于预览、答案缓存读取和回答模型调用。因此旧缓存也不能在当前证据全空时绕过门槛。"
+    }
+  ],
+  "mechanism": "生产代码只新增两处早退，共9行，核心是修复控制流而非发明新的检索算法。旧_build_context_str已能发现实体、关系与chunks全部为空，但其调用方丢失了这一停止信号；新实现保留信号直到公共API。naive则补上此前缺失的最终chunk判空。对比已读取的合并第一父提交，两处守卫此前均不存在。此检查保证的是“无最终证据不进入回答路径”，并不评估残留证据是否真实、充分或与问题有关。",
+  "results": [
+    {
+      "claim": "全空请求不再调用回答模型或读写答案缓存。",
+      "evidence": "新增测试覆盖naive/mix × 重排全淘汰/预算耗尽 × 普通/流式/上下文预览/提示预览，共16种组合；逐项断言标准no_results结果、model未被await、cache.get_by_id与upsert未被await。另有4种aquery_data组合。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/tests/llm/test_query_empty_final_evidence.py"
+    },
+    {
+      "claim": "图证据仍可独立支撑回答，正常chunk命中不受影响。",
+      "evidence": "4个hybrid/mix × 实体/关系正对照，在chunks全被重排淘汰时仍断言success且回答模型调用一次；2个naive/mix有效chunk正对照检查正常生成。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/tests/llm/test_query_empty_final_evidence.py"
+    },
+    {
+      "claim": "公开验证为离线回归，不是生产收益测量。",
+      "evidence": "PR作者报告新增26项通过、定向查询/重排子集102项通过；已核PR头提交57d93d7的Offline Tests Python 3.12/3.14、PostgreSQL 18及pre-commit检查成功。本轮未重新执行这些测试，也未读取全部CI日志。",
+      "source": "https://github.com/HKUDS/LightRAG/pull/4202"
+    },
+    {
+      "claim": "新变化是11月10日合并，而不是当天首次提出或正式发行。",
+      "evidence": "PR创建于10月8日，11月10日13:22:54 UTC合入main；GitHub latest正式发行仍为9月2日的v1.5.7。因此源码可取，但不能描述为pip稳定升级已经包含。",
+      "source": "https://github.com/HKUDS/LightRAG/releases/tag/v1.5.7"
+    }
+  ],
+  "limitations": [
+    "不适用于明确跳过检索的bypass模式，也不为图实体、关系或保留chunk提供真实性、来源授权或充分性保证。",
+    "图查询在最终证据已知之前可能调用关键词模型；本次避免的是回答模型调用，不是所有LLM调用。测试显式提供关键词，以隔离这两个阶段。",
+    "重排阈值0.5只用于复现，仓库默认仍是0.0；没有证据支持直接把0.5推广成生产推荐阈值。",
+    "测试替换了外部搜索传输、重排服务、回答服务和缓存存储，使用确定性字符tokenizer；不是实际数据库、真实模型或网络端到端测量。",
+    "不清理既有答案缓存，也未变更缓存键；只在当前最终证据全空时跳过答案缓存。其他请求的正常缓存行为仍在。",
+    "上下文/提示预览以及流式请求在此边界也变为标准失败结果，下游调用者应明确处理，而非假设一定有可展示的prompt或迭代器。"
+  ],
+  "engineering_notes": [
+    "最小实验A：检出合并提交2ced870a2e592e44a3e23c9521985effc3aa2675，按仓库依赖说明建立隔离环境，运行python -m pytest tests/llm/test_query_empty_final_evidence.py -q。预计覆盖26个用例；这是建议操作，本轮未执行。",
+    "最小实验B：用官方fixture的单chunk与字符tokenizer，在naive/mix分别设置重排分数0.1、阈值0.5；再关闭重排、将max_total_tokens设为120。两种原因都应得到no_results，回答模型及答案缓存读写均为0。",
+    "正对照：为hybrid/mix保留一个实体或关系，虽然chunks全空仍应生成；再保留一个正常chunk。这样能避免将所有无chunk请求误当成无证据。",
+    "新旧对照可在修复前第一父提交638755767d2b1cedfb3f82b9362cfdfcf7a234fc与合并提交各运行同一fixture。记录公开结果字段、最终证据数、回答调用、答案缓存读写；不要把作者复现计数当成本地实测。",
+    "随后接自有公开或获授权语料与实际tokenizer，检查低相关查询、极小预算、真实流式API和前端对no_results的处理；分开记录证据为空率、回答调用量与有证据回答质量。",
+    "本次无存储迁移、新依赖或新配置项。生产使用仍应固定源码版本并验证部署依赖，不因改动行数小而直接替换稳定环境。",
+    "许可证与最小前提：固定提交采用MIT许可，允许使用、修改和分发，但须保留版权与许可声明；这不替代模型、数据及第三方依赖各自的条款。pyproject.toml要求Python ≥3.10，核心依赖包括tiktoken ≥0.7.0、NetworkX、NanoVectorDB等；本条离线回归可按仓库test额外依赖组准备环境，fixture不需要真实模型密钥或在线数据库。实际RAG服务另需配置LLM、embedding及存储，并保持建库与查询的embedding一致；API服务使用api额外依赖组，从源码提供WebUI还须构建前端。官方将默认本地文件持久化存储限定为小规模测试与评估，生产需选择适合的数据库后端。本轮仅核验清单与说明，未安装验证。"
+  ],
+  "sources": [
+    {
+      "title": "LightRAG PR #4202：最终证据为空时停止回答",
+      "url": "https://github.com/HKUDS/LightRAG/pull/4202"
+    },
+    {
+      "title": "合并提交下的最终上下文与naive查询实现",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/lightrag/operate.py"
+    },
+    {
+      "title": "26项公开查询回归用例",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/tests/llm/test_query_empty_final_evidence.py"
+    },
+    {
+      "title": "公开API对no_results的统一结果转换",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/lightrag/lightrag.py"
+    },
+    {
+      "title": "当前最新正式版v1.5.7发布记录",
+      "url": "https://github.com/HKUDS/LightRAG/releases/tag/v1.5.7"
+    },
+    {
+      "title": "修复前第一父提交的查询实现",
+      "url": "https://github.com/HKUDS/LightRAG/blob/638755767d2b1cedfb3f82b9362cfdfcf7a234fc/lightrag/operate.py"
+    },
+    {
+      "title": "PR头提交的离线测试CI",
+      "url": "https://github.com/HKUDS/LightRAG/actions/runs/42653882513"
+    },
+    {
+      "title": "默认重排阈值定义",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/lightrag/constants.py#L66-L68"
+    },
+    {
+      "title": "固定提交MIT许可证",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/LICENSE"
+    },
+    {
+      "title": "固定提交Python与依赖声明",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/pyproject.toml"
+    },
+    {
+      "title": "固定提交安装、模型和存储前提",
+      "url": "https://github.com/HKUDS/LightRAG/blob/2ced870a2e592e44a3e23c9521985effc3aa2675/README.md"
+    }
+  ],
+  "read_scope": "已读PR #4202完整说明与两文件完整diff，核对创建、合并时间与提交；读取合并提交的26项完整测试。 已读固定提交operate.py中的kg_query、最终_build_context_str判空、_build_query_context和naive_query相关执行路径；读取lightrag.py公共API状态转换及constants.py默认阈值。 已读修复前第一父提交相应边界，确认没有本次守卫；读取最新发行元数据及v1.5.7发行说明、PR头提交检查状态。 去重读取reports/2026/10的10月9日至31日全部JSON，以及11月1日至10日全部JSON。GitHub代码搜索返回不完整结果，未将其零命中用作无重复依据。 未安装或运行LightRAG，未调用真实模型/数据库，未逐行审计全库，未验证生产检索指标或真实幻觉率。 补充读取同一固定提交的LICENSE、pyproject.toml，以及README的安装、embedding与存储说明；未执行部署。 本期最终核查时间：2026-11-11T00:11:03Z。"
+}
