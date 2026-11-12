@@ -1,0 +1,111 @@
+{
+  "id": "edgar-exp6-public-checkpoint",
+  "title": "EDGAR共享exp6权重公开可取：从代码与CAFCA数据，推进到现成增强器试用",
+  "problem": "已有Gaussian头部头像在稀疏拍摄、侧脸或复杂表情下可能出现模糊纹理、浮点与局部失真。EDGAR用同一身份参考图条件化的一步扩散增强器生成较清晰伪目标，再回写优化已有头像，避免部署时每帧运行扩散。今日研究重点是既有exp6模型终于被官方链接为公开可取，而不是将此前的方法再次包装成新论文。它不提供从任意单图到可驱动完整头像的一站式流程，也不直接修正不准确的SMPL-X/FLAME跟踪。",
+  "inputs": "图像增强阶段：一个官方edgar_exp6.pt、另行获得的SD-Turbo基础模型与Sapiens 0.3B预训练特征TorchScript权重、待增强的白底RGB头像渲染，以及相同身份的清晰参考图。渲染按application模式白色对称补为正方形再缩放512×512，参考图1024×1024。原生3D优化阶段还必须输入已经训练好的RGBAvatar或CAP4D原生资产、其配置、相机/训练跟踪状态、所需FLAME及原生渲染依赖。训练重现另需成对数据和POSTER等感知损失权重；公开包不包含所有依赖。",
+  "outputs": "edgar-infer输出512×512 RGB增强图像，不输出高斯模型。edgar-refine-avatar完成后保存新的原生头像：RGBAvatar为PLY，CAP4D为checkpoint，并保留原有原生驱动机制；没有通用Mesh、UV或RGB贴图导出。发布下载是一份共享增强器，不是一组已训练人物身份。",
+  "pipeline": [
+    {
+      "title": "1．核对资产与使用边界",
+      "explanation": "从官方v1.0取得edgar_exp6.zip及.sha256，在新目录下载并验证完整校验和后解包。本轮仅检查免登录HTTP元数据、前1024字节与校验文件；没有完成这一步的本地完整校验。模型卡声明导出自model_40001_exp6.pkl，去除优化器状态，保留推理张量；不能据此认定覆盖所有历史实验checkpoint。先确认非商业研究/评估许可，再获取外部依赖。"
+    },
+    {
+      "title": "2．准备身份参考与待增强图",
+      "explanation": "输入同一身份参考图及已有头像渲染目录。application模式把渲染白色补边至正方形、双线性缩放512²；参考图走1024²及[-1,1]归一化。CLI默认training模式与历史应用预处理不同，试用发布权重应显式指定application，避免把预处理不一致误判为模型质量。"
+    },
+    {
+      "title": "3．一步增强并独立评估",
+      "explanation": "缓存参考图的Sapiens特征，经参考投影给SD-Turbo UNet提供身份条件；11处MoE层各有6专家，每层按样本选择一个专家，VAE适配与skip连接保留输入信息。输入渲染经过VAE与一步扩散，解码为增强RGB。固定seed和精度以控制VAE采样随机性，逐视角检查眼嘴、牙齿、身份和纹理，不只看正面截图。"
+    },
+    {
+      "title": "4．用增强图构造三维优化目标",
+      "explanation": "仅图像结果通过检查后，原生适配器从已训练头像采样训练状态并渲染。当前公开默认配置为50个状态乘4个偏航角（-60、-30、30、60度），即200个伪目标，不应误写成50张图。共享增强器处理这些图后释放相关CUDA缓存，再由原生渲染器拟合保存的目标。"
+    },
+    {
+      "title": "5．优化已有参数并保存原生模型",
+      "explanation": "默认500步，损失0.6×L1+0.4×SSIM；不增密、不裁剪、不替换高斯参数身份，检查Gaussian数量保持不变。保存新的RGBAvatar PLY或CAP4D checkpoint；后续动画仍走其原生渲染/驱动而非每帧扩散。对于其他框架，需实现返回avatar、views、optimizer的适配器及可微render、parameters、gaussian_count、save等接口，不能直接把增强图当成可拼接的新头部资产。"
+    }
+  ],
+  "mechanism": "共享exp6中的“6”指每个MoE模块的专家数。一个模型含11个MoE模块，而不是6个checkpoint或6个身份；它保存SD-Turbo UNet完整状态、VAE LoRA/skip权重及参考投影，不含Sapiens、基础SD-Turbo或POSTER。主要方法是利用同一身份参考特征引导输入渲染恢复，并把结果离线蒸馏回原头像。当前模型为CAFCA+NeRSemble联合数据训练版本；没有随本次开放单独CAFCA-only checkpoint。Both联合训练数据仍未公开，因此可运行增强与能够完整重训是两件事。",
+  "results": [
+    {
+      "claim": "本次可以核实的是公开访问能力，而不是新模型质量提升。",
+      "evidence": "v1.0资产API显示11月5日发布/上传，11月11日代码提交将下载链接改为公开。匿名ZIP HEAD 200、大小1,801,316,102字节；前1024字节GET 206且504b0304文件头，.sha256文件200。权限切换精确时刻未由API证明；未整包哈希验证或推理。",
+      "source": "https://github.com/kwanyun/edgar-checkpoint/releases/tag/v1.0"
+    },
+    {
+      "claim": "作者报告RGBAvatar单视频新视角图像指标改善，但不是所有baseline都改善。",
+      "evidence": "论文表2：RGBAvatar单视频LPIPS 0.3619→0.3096（越低越好）、PSNR 16.0469→17.1533（越高越好）、L1（越低越好）0.0832→0.0677。对照表1：CAP4D单视角LPIPS 0.2133→0.2147反而略差，PSNR 17.5651→17.5978仅略升。正文自重演使用10个留出NeRSemble身份，跨身份重演另用6个INSTA身份，不能混为同一测试。均为作者实验，本轮未复现。",
+      "source": "https://arxiv.org/html/2611.07909v1#S4.T2"
+    },
+    {
+      "claim": "身份、时间一致性与极端视角仍可能退化，不能承诺稳定增强。",
+      "evidence": "表4跨重演单视角CSIM（身份嵌入余弦相似度，越高越好）中标为Base的基线0.5510→0.5169；表7 tWE×10^-3（低更好），RGBAvatar 7.424→5.574但GaussianAvatars 4.929→5.938。表10 CAP4D大偏航与大嘴部运动交集：LPIPS 0.23054→0.23507、L1 0.07475→0.08084，均变差。",
+      "source": "https://arxiv.org/html/2611.07909v1#S4.T10"
+    },
+    {
+      "claim": "离线优化保留原生渲染速度，但耗时和显存不可简单外推。",
+      "evidence": "表8作者RTX3090：CAP4D约5.04±0.11分钟、RGBAvatar约7.96±0.98分钟；最终渲染FPS分别50.3→49.4、813.8→826.3。表中GaussianAvatars约16.60分钟，但当前发布没有其独立原生适配器。最小推理显存没有明确给出；测试设备不能当作最低硬件要求。",
+      "source": "https://arxiv.org/html/2611.07909v1#S4.T8"
+    },
+    {
+      "claim": "发布工程做过有限兼容性验证，不等于论文完整复现。",
+      "evidence": "作者VALIDATION列20项自动测试，在RTX A6000 48GB做导出模型与历史应用单张图FP32像素差最大值/均值0.0；两个native adapter各仅3次优化更新，Gaussian数量不变并完成保存重载。检查使用了带本地修改的baseline，不构成所有官方baseline版本或完整测试集的独立复现。",
+      "source": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/VALIDATION.md"
+    }
+  ],
+  "limitations": [
+    "非商业研究/评估限制：权重LICENSE中NVIDIA §3.3仍适用；同时保留的Stability条款不能被解释为自动允许商用。数据与外部依赖也需分别遵守许可。",
+    "本轮未下载完整ZIP、未计算其本地完整哈希、未加载模型、未运行任何图像或3D优化。小范围字节验证只证明当前文件可公开取回，不证明全部字节完整或效果正确。",
+    "RGBAvatar/CAP4D适配器来自作者带本地修改的研究checkout；公开commit并非完全相同源码树。DEGAS、WebAvatar、SplatCtrlA没有即插即用的官方适配器。",
+    "现成checkpoint不等于全数据开放：Both仍私有，CAFCA公开部分不足以精确重训联合版本。作者实现与论文还存在如时间步249/250、平衡项0.002/0.001及训练工程改动，须对照implementation文档。",
+    "难以从本已错误的几何或跟踪恢复真实结构，严重结构失败在训练数据中被过滤；多视角2D伪目标可能互相冲突，嘴腔、透明和高频细节可能不可靠。",
+    "没有新增驱动参数化、严格几何保证、头身拼接或Mesh+UV贴图导出；CAP4D特殊训练状态校正也不能当作新序列驱动普遍修复。",
+    "论文§4.1写渲染50个视图，公开默认配置则是50个训练状态×4个偏航角，即200个目标；两种描述不可直接等同。复现应记录实际配置，不替作者补齐这种口径差异。表4的表题仅写CSIM和Base，不能把其身份相似度结果泛化到所有底座。"
+  ],
+  "engineering_notes": [
+    "最小图像试用示例（未执行）：edgar-infer --checkpoint checkpoints/edgar_exp6.pt --sapiens checkpoints/sapiens_0.3b_epoch_1600_torchscript.pt2 --input renders/ --reference reference.png --output outputs/refined_images --preprocessing application --seed 2026。另需已准备SD-Turbo缓存。选择全新输出目录，工具会拒绝已存在目录。",
+    "环境要求为Linux、Python 3.10、CUDA NVIDIA GPU；源码固定torch 2.3.1+cu121。先做独立图像增强，避免未评估伪目标就重训或改写已有头像。POSTER只在训练相关流程需要。",
+    "工程建议而非实测结论：用固定相机/表情序列比较增强前后身份相似度、嘴部开闭/牙齿、跨视角一致性和时序闪烁；保留原生模型副本，在新目录输出。个别图像更锐不代表身份或几何更准。",
+    "如果要接入另一高斯框架，主要成本是原生可微渲染器、相机及表达状态、参数/优化器与保存接口适配，不是把六个专家拆成可拼接头像。许可不满足商用目标时，应先停止生产接入，仅在允许范围评估。"
+  ],
+  "sources": [
+    {
+      "title": "官方公开权重与模型卡（固定版本）",
+      "url": "https://github.com/kwanyun/edgar-checkpoint/blob/c88da873e682daf07f5290d43837d1694dbf54de/README.md"
+    },
+    {
+      "title": "v1.0实际下载资产",
+      "url": "https://github.com/kwanyun/edgar-checkpoint/releases/tag/v1.0"
+    },
+    {
+      "title": "11月11日公开下载文档变更",
+      "url": "https://github.com/kwanyun/edgar-code/commit/7954c5b9a144828d266e39c2d576b7f4ca2a2547"
+    },
+    {
+      "title": "下载及数据开放范围",
+      "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/downloads.md"
+    },
+    {
+      "title": "原生头像优化文档",
+      "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/refinement.md"
+    },
+    {
+      "title": "实现与论文差异",
+      "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/implementation.md"
+    },
+    {
+      "title": "作者验证范围",
+      "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/VALIDATION.md"
+    },
+    {
+      "title": "权重许可证",
+      "url": "https://github.com/kwanyun/edgar-checkpoint/blob/c88da873e682daf07f5290d43837d1694dbf54de/LICENSE.txt"
+    },
+    {
+      "title": "EDGAR论文v1全文",
+      "url": "https://arxiv.org/html/2611.07909v1"
+    }
+  ],
+  "read_scope": "本轮阅读了EDGAR论文v1正文的方法、实验表1—11及局限；阅读固定版本官方README、downloads、refinement、implementation、VALIDATION和推理/模型/原生优化/适配器源码，以及公开checkpoint模型卡和许可证。核查公开release/commit时间与匿名HTTP元数据、ZIP前1024字节、校验文件；未完整下载权重或运行实验。论文数值属于作者结果，工程接入建议属于本次分析，不是独立复现。 本期最终核查时间：2026-11-12T00:06:50Z。"
+}
