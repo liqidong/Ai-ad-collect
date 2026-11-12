@@ -1,0 +1,264 @@
+{
+  "date": "2026-11-12",
+  "title": "算法研究日报",
+  "edition_label": "第2026-11-12期 · 增量核查与技术详解",
+  "summary": "相对11月11日报，新增三项实质进展：EDGAR已存放的六专家检查点现由官方提供公开下载；Deep Agents代码模式可显式接入同一文件后端，但不继承文件工具审批；MinerU 4.2.1修复预算截断续读的同页遗漏。分别标明可下载研究权重、开发分支能力与正式发行修复，不把开放下载等同可商用或已复现。",
+  "notice": "公开研究草稿。重点核查11月11日开放状态、合并与发行变化，并对照上一期和近期历史去重。EDGAR本期增量是公开访问，不是模型首次上传或新方法；NVIDIA非商业研究/评估限制仍适用。DepthGS新公告涉及旧展示机制，不作为新项目凑数。来源事实、作者验证、工程判断与未知分开。本轮未安装、下载大体积权重、训练或运行测试，未上传任何用户数据；无新增仅限明确列出的定向核查。",
+  "verified_at": "2026-11-12T00:06:50Z",
+  "items": [
+    {
+      "id": "edgar-exp6-public-checkpoint",
+      "category": "数字人 / 几何",
+      "title": "EDGAR共享exp6权重公开可取：从代码与CAFCA数据，推进到现成增强器试用",
+      "finding": "相对此前日报记录的私有checkpoint，官方11月11日提交把exp6下载改为公开发布页。匿名HEAD返回200、ZIP大小1,801,316,102字节，小范围GET返回206和ZIP文件头，校验文件也可读取。它是一个共享增强模型，11个MoE模块各含6个专家，不是6个人物模型。资产实际于11月5日上传；本次新增是官方公开访问说明及当前可访问性，不是新训练或首次上传。",
+      "relevance": "可以先独立检验已有头像渲染的头脸清晰度，再评估将增强图作为伪监督优化既有Gaussian。直接推理只输出2D图，不能等同于修好驱动、几何或导出Mesh。",
+      "action": "非商业研究/评估范围内，先核许可证与完整校验和，再以固定身份参考图和现有白底渲染做512×512图像对照；显式选application预处理、固定seed。确认身份、嘴部及多视角没有退化后，再考虑RGBAvatar/CAP4D原生优化；其他头像框架需要新适配器。",
+      "caveat": "未下载完整1.8GB包、未核本地完整哈希、未加载或实测。NVIDIA条款限制非商业研究/评估，Stability条款不覆盖该限制。SD-Turbo/Sapiens未打包，Both训练数据仍私有；公开baseline与作者修改版不完全相同。",
+      "recency_label": "新增开放能力；方法与论文非今日新发",
+      "source_date": "论文2026-11-05提交、11-06公告；资产2026-11-05上传；公开链接提交2026-11-11 07:47:29 UTC；权限切换精确时间未知",
+      "sources": [
+        {
+          "title": "官方公开权重与模型卡（固定版本）",
+          "url": "https://github.com/kwanyun/edgar-checkpoint/blob/c88da873e682daf07f5290d43837d1694dbf54de/README.md"
+        },
+        {
+          "title": "v1.0实际下载资产",
+          "url": "https://github.com/kwanyun/edgar-checkpoint/releases/tag/v1.0"
+        },
+        {
+          "title": "11月11日公开下载文档变更",
+          "url": "https://github.com/kwanyun/edgar-code/commit/7954c5b9a144828d266e39c2d576b7f4ca2a2547"
+        },
+        {
+          "title": "下载及数据开放范围",
+          "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/downloads.md"
+        },
+        {
+          "title": "原生头像优化文档",
+          "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/refinement.md"
+        },
+        {
+          "title": "实现与论文差异",
+          "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/docs/implementation.md"
+        },
+        {
+          "title": "作者验证范围",
+          "url": "https://github.com/kwanyun/edgar-code/blob/7954c5b9a144828d266e39c2d576b7f4ca2a2547/VALIDATION.md"
+        },
+        {
+          "title": "权重许可证",
+          "url": "https://github.com/kwanyun/edgar-checkpoint/blob/c88da873e682daf07f5290d43837d1694dbf54de/LICENSE.txt"
+        },
+        {
+          "title": "EDGAR论文v1全文",
+          "url": "https://arxiv.org/html/2611.07909v1"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-12/edgar-exp6-public-checkpoint.md"
+    },
+    {
+      "id": "deepagents-quickjs-backend-fs",
+      "category": "智能体 / 应用",
+      "title": "Deep Agents：代码模式直连文件后端，但不继承文件工具审批",
+      "finding": "11月11日合入的四项改动给QuickJS代码模式增加显式开启的fs读写接口；fs=True可自动取得create_deep_agent使用的同一后端。代码能够读取UTF-8文件、就地处理并保存结果，不必把文件全文先变成模型可见的工具消息。",
+      "relevance": "适合把实验日志、JSON或文本语料的过滤与汇总留在代码执行中。真正新增的是文件后端接入与绑定，不是首次提供代码模式、多Agent或持久工作流；是否节省tokens和提高成功率尚无实验。",
+      "action": "先固定合并提交，在StateBackend假文件或受限临时后端上跑官方test_fs.py；核对同步/异步读取、写回、快照恢复和跨后端误绑定。若文件访问依赖permissions或interrupt_on审批，保持fs关闭。",
+      "caveat": "仅main源码，已核最新QuickJS 0.3.12及Deep Agents 0.7.35不含新接口。fs直接调用后端，未继承FilesystemMiddleware权限与审批；这是显式开放边界，不是默认宿主越权漏洞。未实测。",
+      "recency_label": "11月11日源码合并；beta/alpha接口，未正式发行；代码与测试审阅",
+      "source_date": "PR #7637/#7638/#7668/#7669于2026-11-11 01:23:48–01:23:51 UTC依次合入main；本条固定最后合并提交94657a47f8d47acfc17c19157f823b7bdd902994。QuickJS 0.3.12于11月7日发布，Deep Agents 0.7.35于11月9日发布，均早于新增。",
+      "sources": [
+        {
+          "title": "fs=True自动绑定后端：PR #7669",
+          "url": "https://github.com/langchain-ai/deepagents/pull/7669"
+        },
+        {
+          "title": "新增UTF-8读取：PR #7637",
+          "url": "https://github.com/langchain-ai/deepagents/pull/7637"
+        },
+        {
+          "title": "新增写入、列目录、存在检查和删除：PR #7638",
+          "url": "https://github.com/langchain-ai/deepagents/pull/7638"
+        },
+        {
+          "title": "SDK向中间件传递同一backend：PR #7668",
+          "url": "https://github.com/langchain-ai/deepagents/pull/7668"
+        },
+        {
+          "title": "固定提交：开关、绑定及权限警告",
+          "url": "https://github.com/langchain-ai/deepagents/blob/94657a47f8d47acfc17c19157f823b7bdd902994/libs/partners/quickjs/langchain_quickjs/middleware.py"
+        },
+        {
+          "title": "固定提交：后端操作实现",
+          "url": "https://github.com/langchain-ai/deepagents/blob/94657a47f8d47acfc17c19157f823b7bdd902994/libs/partners/quickjs/langchain_quickjs/_fs.py"
+        },
+        {
+          "title": "固定提交：JavaScript接口与参数边界",
+          "url": "https://github.com/langchain-ai/deepagents/blob/94657a47f8d47acfc17c19157f823b7bdd902994/libs/partners/quickjs/langchain_quickjs/_fs_shim.js"
+        },
+        {
+          "title": "固定提交：完整fs回归测试",
+          "url": "https://github.com/langchain-ai/deepagents/blob/94657a47f8d47acfc17c19157f823b7bdd902994/libs/partners/quickjs/tests/unit_tests/test_fs.py"
+        },
+        {
+          "title": "正式发行仍为langchain-quickjs 0.3.12",
+          "url": "https://github.com/langchain-ai/deepagents/releases/tag/langchain-quickjs%3D%3D0.3.12"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-12/deepagents-quickjs-backend-fs.md"
+    },
+    {
+      "id": "mineru-421-lossless-continuation",
+      "category": "采集 / 工具",
+      "title": "MinerU 4.2.1：分段阅读先读完当前页，别把截断游标当新目标",
+      "finding": "11月11日正式版修复Doclib的Markdown文档/单页续读：context=0下若输出在页内截断，返回文档locator与已消费after游标，避免重读尾块后直接跳到下一页。",
+      "relevance": "Agent逐段研读论文或RAG采集时，源PDF和完整导出可能没有缺字，却在读取协议层丢掉证据。此次增量修的是消费进度，不是OCR准确率、检索算法或模型理解能力。",
+      "action": "固定4.2.1，先用官方合成缓存测试验证短预算和默认30000字符两种情况；客户端必须原样转发next_request.locator及after，并检查重复状态和累计内容。",
+      "caveat": "修复限定context=0；块/字符context>0的截断仍有已知重复与遗漏。直接块读取仍保持原有目标范围。作者/维护者回归不是本轮实测；升级服务而不修客户端转发逻辑仍可能读错。",
+      "recency_label": "11月11日已正式发行；代码及回归审阅，未安装运行",
+      "source_date": "PR #5749于2026-11-10提出，2026-11-11 07:22:37 UTC合入dev（261f1fe2c57755fff15d2d0088e5a17e17752379）；mineru-4.2.1-released于2026-11-11 13:53:12 UTC正式发布，已核标签源码包含修复。",
+      "sources": [
+        {
+          "title": "MinerU 4.2.1正式发行说明",
+          "url": "https://github.com/opendatalab/MinerU/releases/tag/mineru-4.2.1-released"
+        },
+        {
+          "title": "PR #5749：问题、修复范围、作者和维护者验证",
+          "url": "https://github.com/opendatalab/MinerU/pull/5749"
+        },
+        {
+          "title": "4.2.1读取计划与续读实现",
+          "url": "https://github.com/opendatalab/MinerU/blob/mineru-4.2.1-released/mineru/doclib/services/content_read_svc.py"
+        },
+        {
+          "title": "4.2.1完整续读回归测试",
+          "url": "https://github.com/opendatalab/MinerU/blob/mineru-4.2.1-released/tests/unittest/test_doclib_read_continuation.py"
+        },
+        {
+          "title": "4.2.1 SDK读取与认证约定",
+          "url": "https://github.com/opendatalab/MinerU/blob/mineru-4.2.1-released/docs/next/sdk/doclib-client.md"
+        },
+        {
+          "title": "4.2.1 CLI续读语义与已知限制",
+          "url": "https://github.com/opendatalab/MinerU/blob/mineru-4.2.1-released/docs/next/cli/mineru-read.md"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-12/mineru-421-lossless-continuation.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "sources": [
+        {
+          "title": "11",
+          "url": "https://github.com/liqidong/Ai-ad-collect/tree/main/reports/2026/11"
+        }
+      ],
+      "category": "数字人 / 几何",
+      "status": "EDGAR历史去重：公开归档此前已介绍方法及CAFCA数据，今日仅新增checkpoint公开可访问，方法详解作为开放能力试用背景。"
+    },
+    {
+      "sources": [
+        {
+          "title": "2611.13628",
+          "url": "https://arxiv.org/abs/2611.13628"
+        },
+        {
+          "title": "DepthGS",
+          "url": "https://github.com/AISLAB-sustech/DepthGS"
+        }
+      ],
+      "category": "数字人 / 几何",
+      "status": "DepthGS：虽有2026年11月新arXiv公告，但AISLAB-sustech/DepthGS展示页2025-09-17已描述相同深度自适应法线/跨视角机制；代码链接仍为占位。未核实实质新实现或开放能力，不作为今日新增推荐。"
+    },
+    {
+      "sources": [
+        {
+          "title": "flexavatar",
+          "url": "https://github.com/tobias-kirschstein/flexavatar"
+        },
+        {
+          "title": "cap4d",
+          "url": "https://github.com/felixtaubner/cap4d"
+        },
+        {
+          "title": "DEGAS",
+          "url": "https://github.com/initialneil/DEGAS"
+        },
+        {
+          "title": "SplatCtrlA-release",
+          "url": "https://github.com/xiangjun-xj/SplatCtrlA-release"
+        }
+      ],
+      "category": "数字人 / 几何",
+      "status": "其余已跟踪头像项目：本轮检查FlexAvatar、CAP4D、DEGAS、SplatCtrlA-release默认分支最新提交，未发现11月11日新增；这不是对所有分支、第三方镜像或外部权重宿主的穷尽核查。"
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "收录Deep Agents/QuickJS文件后端接入这一组11月11日合并。另核查OpenAI Agents Python、Codex及Claude Agent SDK同日合并窗口，未将大量未深读候选写成已验证推荐。Qwen Code v1.0.0-preview于11月11日03:55 UTC发布预览原生包，但本轮只核发行说明，尚未审阅新架构实现，不将其当作稳定生产或性能提升证明。",
+      "sources": [
+        {
+          "title": "Qwen Code 1.0预览官方发行",
+          "url": "https://github.com/QwenLM/qwen-code/releases/tag/v1.0.0-preview"
+        },
+        {
+          "title": "Deep Agents发行记录",
+          "url": "https://github.com/langchain-ai/deepagents/releases"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "本轮无另行完成深读的新增条目。程序化文件处理能力已归入智能体栏目，不重复列项。Claude Code最新发行仍为11月10日2.1.322；Anthropic同日多用户多Agent研究网页在本轮打开失败，仅保留待核线索，不据搜索摘要报道实验结论。",
+      "sources": [
+        {
+          "title": "Claude Code官方发行记录",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "Anthropic多用户多Agent研究原始入口，本轮打开失败",
+          "url": "https://alignment.anthropic.com/2026/worse-together/"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "本轮未新增独立RAG详解。已定向检查LightRAG、RAGFlow、Haystack的11月11日默认分支提交；有队列分层、BM25并发统计、Responses驱动及测试改造等候选，但未完成逐项深读，不将其当已验证推荐。LightRAG main同日把Python最低版本从3.10提高到3.11，属于部署前提变化；昨日详解固定在11月10日提交，其>=3.10描述仍对应当时版本，不应无依据改旧报告。",
+      "sources": [
+        {
+          "title": "LightRAG提高Python最低版本的合并",
+          "url": "https://github.com/HKUDS/LightRAG/commit/1889d782a2935929c00ab4956eb7c92c8ccce10f"
+        },
+        {
+          "title": "RAGFlow分层入库队列候选",
+          "url": "https://github.com/infiniflow/ragflow/pull/22206"
+        },
+        {
+          "title": "Haystack BM25并发统计修复候选",
+          "url": "https://github.com/deepset-ai/haystack/pull/13674"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "收录MinerU 4.2.1续读修复，不重复昨日4.2.0的URL下载安全主题。另检查Docling的JATS代码块/脚注链接、Markdown图注与性能修复，以及Crawl4AI默认分支提交窗口；未深读候选不补成条目，也不把范围有限的检查写成全领域无进展。",
+      "sources": [
+        {
+          "title": "MinerU 4.2.1正式发行说明",
+          "url": "https://github.com/opendatalab/MinerU/releases/tag/mineru-4.2.1-released"
+        },
+        {
+          "title": "Docling JATS代码块保留候选",
+          "url": "https://github.com/docling-project/docling/pull/5283"
+        },
+        {
+          "title": "Docling JATS脚注链接保留候选",
+          "url": "https://github.com/docling-project/docling/pull/5290"
+        },
+        {
+          "title": "Crawl4AI提交记录",
+          "url": "https://github.com/unclecode/crawl4ai/commits/main/"
+        }
+      ]
+    }
+  ]
+}
