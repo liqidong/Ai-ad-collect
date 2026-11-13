@@ -1,0 +1,117 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-13
+---
+
+# LightRAG 接入 Docling VLM：可换解析模型，但须隔离缓存与版面证据
+
+核查时间：2026-11-13T00:13:34Z
+
+来源时点：合并：2026-11-12 16:47:44 UTC（2026-11-13 00:47:44 Asia/Shanghai）；Docling 2.150.0：2026-11-10；Serve 1.38.2：2026-10-27；LightRAG 正式版 1.5.7：2026-09-02
+
+开放范围：新接入已合入 main；非稳定版即装，真实模型端到端待验
+
+## 阅读范围与证据边界
+
+核查时间：2026-11-13（UTC）。已阅读 #4346 原始说明、合并时间、完整10文件补丁（配置、部署文档、客户端、缓存、IR校验、health及测试），并核对固定提交相关源码、许可证、依赖和正式发行信息；检查作者所列局部测试及 CI 状态。对照公开归档2026-10-09至2026-11-12共35期标题/发现并重点核对邻近日报去重。不是论文全文研读；未审阅全部仓库或完整CI日志，未运行代码，真实模型和生产表现未知。 本期最终核查时间：2026-11-13T00:13:34Z。
+
+## 核心问题与已有瓶颈
+
+LightRAG 原有 Docling 适配器把转换 pipeline 固定为 standard。即使服务端具备只能在 VLM pipeline 中运行的 preset，用户也无法从这条接入链路选择。新增功能解决的是配置与数据通路，而不是发明 OCR 算法。两条通路的输入参数和结构语义不同：若只增加一个模型选择开关、不同时调整缓存和失败诊断，就可能错误复用旧结果，或把 VLM 的空输出/弱版面结构当作正常入库。与前期日报的 OCR 续读、LightRAG 空证据处理相比，本条新增的是另一条可选择的解析 pipeline；这些旧问题不作为本次新成果。
+
+## 输入
+
+用户授权交给 Docling 服务的文件、DOCLING_ENDPOINT、pipeline 选择和服务端已注册的 VLM preset。最小示例用公开 PNG/PDF；不能据示例推断所有文档格式均已在 VLM 下通过测试。DOCLING_PIPELINE 默认 standard；选择 vlm 时必须提供 DOCLING_VLM_PRESET，例如 minicpm_ocr。真实模型引擎、权重和计算资源由 Docling Serve 端另行配置，本改动不提供新模型权重，也不包含训练流程。
+
+## 输出
+
+转换产物仍是 DoclingDocument JSON、Markdown 及引用资源，随后沿用 LightRAG sidecar/IR 构建流程形成结构化块。不是直接把伴随 Markdown 文件塞进入库器：IR builder 读取 DoclingDocument JSON。VLM 生成的 Markdown 可在 Docling 内重新导入为 DoclingDocument，但不等价于 standard 版面模型的阅读顺序、定位或表格结构；Markdown 表格仍可能被重建成 table item。空 IR 沿用原有失败约束，本次增加 VLM 场景解释，不应说本次首次拒绝空文档。
+
+## 逐步流程
+
+### 1. 选择可执行的服务与 preset
+
+输入为服务地址、pipeline/preset 环境变量和服务端依赖。适配器将 pipeline 规范化为 standard 或 vlm；未知值以及 vlm 下缺失 preset 会在构造客户端时报错。/health 增加配置展示和 pipeline_error，可先查配置，但不代表模型已加载或端到端可运行。minicpm_ocr 的注册依赖 Docling≥2.149，不能只看 Serve 版本号。输出是明确的 pipeline 配置，或配置错误。
+
+### 2. 构造互斥的转换参数
+
+输入为文件和已选配置。VLM multipart 请求发送 pipeline=vlm、vlm_pipeline_preset，继续请求 ZIP、JSON/Markdown 与 referenced 图片；不发送 standard 专属 do_ocr、force_ocr、ocr_engine、ocr_preset、ocr_lang、公式增强参数。被忽略的非默认 OCR 配置会告警，避免用户以为它们影响了 VLM。standard 路径保持已有请求行为。
+
+### 3. 异步转换并保留正确失败语义
+
+沿用 POST /v1/convert/file/async 提交，轮询 /v1/status/poll/{task_id}，成功后取 /v1/result/{task_id}。服务端在工作进程中解析 preset，所以未知或不允许的 preset 往往以异步任务失败出现，不应一概期待上传时 HTTP 422。最终代码为轮询失败及 JSON envelope 失败追加有条件的 preset/版本排查提示；提示不是判定每个故障均由 preset 引起。输出为转换包或明确失败。
+
+### 4. 让缓存只依赖实际生效的配置
+
+输入为文件身份、pipeline 和有效参数。standard 保持原有签名字典以延续旧缓存；vlm 的 tunable signature 只记录 pipeline 与 preset，且 manifest 固定常量注明实际 pipeline。更改 VLM 不使用的 OCR 配置不会引起无意义失效；无签名的 legacy 缓存只允许沿用 standard，不在 VLM 下误命中。输出是相互隔离且符合真实参数语义的解析缓存。
+
+### 5. 复用 IR 构建并验收语义
+
+输入为解包后的 DoclingDocument JSON。现有 builder 筛选正文内容并映射成 IR 块，而不是自动补齐作者未给出的层级、跨页表格或定位信息。若块数为零则失败，本次针对 VLM 追加检查模型是否返回空内容的诊断。最后对公开测试页人工检查正文、表格、页码引用及缺失内容，得到可入库的结果或阻止入库的失败；通过接口测试不代表实际知识检索质量已通过。
+
+## 关键机制与真实增量
+
+关键是把 pipeline 选择贯穿配置、请求、缓存、健康状态和失败边界，而不是单独暴露模型名称。VLM 是生成内容再重建文档结构，standard 通路的 OCR 参数和版面保证不能直接迁移。缓存签名只纳入真正生效的参数，是可复用的工程做法。注意 PR 开头仍有早期“上传 400/422”以及“新增零块拒绝”的描述；最终补丁显示应以异步失败诊断为准，零块拒绝原本已存在。本文据最终固定提交区分新增与既有行为。
+
+## 来源报告的效果与证据
+
+### 作者报告局部集成打通，但并非真实 OCR 模型验证
+
+作者在 Docling 2.150 中调用真实 VlmPipeline 和 minicpm_ocr preset，将模型端指向本地 OpenAI-compatible stub。PNG 产生3个 body children/3段 texts，经 LightRAG IR builder 得1个带 Sample 标题的块。这个数字只说明预设的 stub 输出能穿过文档结构通路，不是数据集指标，也不衡量识别准确率。作者明确未覆盖 Docling Serve HTTP 跳转。
+
+[原始证据](https://github.com/HKUDS/LightRAG/pull/4346)
+
+### 新增接口与缓存行为具备自动测试证据
+
+完整补丁加入 fake transport/ZIP 测试，覆盖 VLM payload 省略 OCR 字段、缺 preset/未知 pipeline、告警、轮询/envelope 失败提示、signature 隔离、legacy 缓存限制、health 状态及零块诊断。作者叙述的本地快照为 client 33、cache 13、IR builder 28、engine signature 8项通过；后续补丁又增加测试，不能把快照计数当最终总数。
+
+[原始证据](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/tests/parser/external/docling/test_client.py)
+
+### CI 记录提供离线测试状态，不提供生产收益证据
+
+PR head 9b011a86f1dd8f9044cae60d9f433f20c1125c26 的检查记录显示 Python 3.12/3.14 Offline Tests、pre-commit 等成功。本次查看状态而未审阅完整执行日志；没有独立运行测试，亦无真实服务压测。
+
+[原始证据](https://github.com/HKUDS/LightRAG/actions/runs/43260245762)
+
+### 有明确版本接入门槛
+
+改动在11月12日合入 main；最新 LightRAG 正式发布仍为9月2日 v1.5.7。Docling Serve v1.38.2 发布时使用 Docling 2.142.1，而 minicpm_ocr 注册要求≥2.149。升级 Serve 环境依赖后可能可用，但仅复用发布时锁定依赖不足。Docling 2.150.0 已于11月10日发布。
+
+[原始证据](https://github.com/docling-project/docling-serve/releases/tag/v1.38.2)
+
+## 限制与未知
+
+- 没有真实模型、GPU、真实文档集的 OCR 准确率、表格指标、推理时间或显存测试；不能声称优于 standard 或适合直接生产替换。
+- VLM 的 DoclingDocument 不携带 standard 版面模型同等的结构证据。实际表格与阅读顺序质量须逐文档检查，尤其不能把生成内容当可靠原文引用。
+- 模型端 stub 不等于完整 Docling Serve 集成。preset 注册、allowlist、模型下载、远端 API 权限和资源消耗均需在实际部署验证。
+- 合入 main 不等于进入正式稳定发行；固定提交只提高可追溯性，不保证后续上游兼容。
+- LightRAG 配置在构造客户端时校验，并非保证整个服务启动即失败；health 展示配置也不证明模型 ready。
+- 本次无独立复现、生产应用证据或第三方性能评价。未安装模型、未上传用户文档、未运行训练或推理。
+
+## 工程判断、最小试用与建议
+
+- 开放状态：LightRAG 源码和补丁已可取，MIT；固定提交 pyproject 要求 Python≥3.11。Docling Serve 为独立服务，Python≥3.10，MIT。具体 preset 模型权重许可证、商用范围、依赖下载和算力须另查，不能沿用集成代码许可证推断。
+- 最小试验第一步：隔离环境固定 LightRAG 提交 85eaa9909010ca07691ae38214401cf83f0c8f8a；按项目依赖安装 API 与 pytest extra 后先跑 test_client.py、test_cache.py、test_parser_validate_ir.py 和 test_health_docling_status.py。这只是建议步骤，本文没有执行。
+- 第二步：在受控本地网络部署 Serve，核对实际 Docling 版本及 preset 清单。要用 minicpm_ocr，需至少2.149，作者局部验证用2.150；仅 uv sync --frozen 保持旧锁不能完成升级。服务优先监听127.0.0.1，不未经保护暴露转换端口。
+- 第三步：设置 DOCLING_ENDPOINT=http://localhost:5001、DOCLING_PIPELINE=vlm、DOCLING_VLM_PRESET=minicpm_ocr，并在 Serve 端单独配好模型引擎。先检查 /health，再用公开单页样本试解析；配置成功不代表模型可用。
+- 第四步：对同页分别运行 standard/VLM，记录原文忠实度、关键字段、表格、页码证据、IR 块数、耗时与峰值资源；改变被忽略 OCR 参数应保持 VLM 缓存，改变 preset 应失效。测试缺 preset、空输出和服务失败，确认不会悄悄把不完整文档入库。
+- 工程判断：可以作为按文档类别选择的实验通道，不建议全库一键替换。若收益只体现在某类扫描件，保留原始来源与 pipeline/preset/版本标记，按质量门槛路由，不以模型名或主观示例决定默认配置。
+- 合规边界：文档会发送到配置的 Docling endpoint；若模型引擎又调用第三方 API，还会产生另一跳传输。先用公开样本，确认每一跳授权、留存与凭据隔离后再评估敏感资料。
+
+## 原始来源
+
+- [LightRAG #4346：Docling VLM 接入及作者验证说明](https://github.com/HKUDS/LightRAG/pull/4346)
+- [固定提交部署文档](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/docs/ParserServiceDeployment.md)
+- [固定提交 Docling 客户端与异步失败处理](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/lightrag/parser/external/docling/client.py)
+- [固定提交缓存隔离](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/lightrag/parser/external/docling/cache.py)
+- [固定提交 IR 校验](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/lightrag/parser/external/docling/parser.py)
+- [Docling v2.150.0](https://github.com/docling-project/docling/releases/tag/v2.150.0)
+- [Docling Serve v1.38.2](https://github.com/docling-project/docling-serve/releases/tag/v1.38.2)
+- [LightRAG v1.5.7 正式版](https://github.com/HKUDS/LightRAG/releases/tag/v1.5.7)
+- [固定提交客户端测试](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/tests/parser/external/docling/test_client.py)
+- [LightRAG MIT 许可证](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/LICENSE)
+- [固定提交依赖与 Python 版本](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/pyproject.toml)
+- [固定提交 IR builder](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/lightrag/parser/external/docling/ir_builder.py)
+- [固定提交 health 测试](https://github.com/HKUDS/LightRAG/blob/85eaa9909010ca07691ae38214401cf83f0c8f8a/tests/api/test_health_docling_status.py)
