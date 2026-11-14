@@ -1,0 +1,109 @@
+{
+  "id": "lightrag-entity-exact-delete",
+  "title": "LightRAG 手工图谱名称解析：关系可容错，实体删除必须固定目标",
+  "problem": "核心问题不是检索模型，而是人工修订知识图谱时“创建成功、后续找不到”。实体创建沿用抽取的字符规范化，例如全角括号变半角、HTML 空格实体解码；此前部分关系接口却直接使用调用者原字符串。另一个独立缺陷是同一操作给键锁传入重复名称，非可重入锁会等待自己。11月13日合并的 #4395 统一关系与查询入口的名称解析，同时刻意不把实体删除改成自动回退：重试时动态改变目标可能误删另一个节点。",
+  "inputs": "不涉及训练或模型推理。输入是调用者提供的实体名称/关系两端名称、图属性，以及现有图数据库、向量库、chunk 追踪 KV 和工作空间锁。原始名称与规范化名称可能只是同一实体的两种拼写，也可能在历史数据中确实是两个不同节点；实现必须保留后一种可能。",
+  "outputs": "查询返回真实存储标识；关系创建/编辑/删除操作命中解析后的节点或边并同步相关存储。非法名称的核心删除返回 fail/400，缺失目标为 not_found/404，存储故障仍为 500。实体删除只处理请求中指定的精确存储键：规范化名称存在时只在 404 信息中提示，不自动跳转删除。",
+  "pipeline": [
+    {
+      "title": "1．生成候选地址，不急于改写目标",
+      "explanation": "输入原始名称，调用与抽取一致的 normalize_entity_name 得到规范化形式；维护 requested/normalized 两个地址。非字符串输入被归为参数错误。这不是语义消歧或大模型判断，也不会自动合并相似企业名称。"
+    },
+    {
+      "title": "2．先锁定候选地址，再解析",
+      "explanation": "写操作把每个端点的原始名与非空规范化名放入同一工作空间 GraphDB 键集合，排序后获取锁。底层 _KeyedLockContext 改为 sorted(set(keys))，相同键只获取一次，避免自锁；统一排序继续约束多键获取顺序。"
+    },
+    {
+      "title": "3．保留历史精确节点的优先级",
+      "explanation": "持锁后检查：若原名与规范化名不同且原名节点存在，优先原名；否则采用非空规范化名。关系写路径随后检查节点/边存在性。读查询采用同一规则但不加写锁，读到的结果不承诺在下一次写操作时仍有效。"
+    },
+    {
+      "title": "4．区分关系操作与实体删除",
+      "explanation": "关系创建、编辑拒绝解析后两端成为同一节点的自环；关系删除允许处理历史自环。编辑/删除使用排序后的解析端点保证边、向量 ID、chunk 追踪键一致。创建保留调用者方向写图，仅向量标识排序，不能概括为所有路径均交换端点。"
+    },
+    {
+      "title": "5．实体删除重试不重新定位",
+      "explanation": "实体删除虽计算规范化名称用于锁定和提示，但查找与删除仍使用原始精确键。如果该节点已被第一次调用删除，第二次返回 404，清理该精确键遗留的追踪行，不能转而删除还活着的规范化同名节点。该行为延续 main 的 exact-only 契约，防止本轮“统一解析”引入新的误删回归。"
+    },
+    {
+      "title": "6．用故障注入和真实本地存储验证",
+      "explanation": "官方新测试通过 ASGI REST 路由驱动 NetworkX、JSON KV、nano vector DB 和真实 admin gate，执行创建→存在查询→建关系→重复拒绝→反向编辑→查询→删关系→按精确名删实体。另注入节点已删除但追踪清理失败，再次删除时验证另一个规范化节点仍存在。"
+    }
+  ],
+  "mechanism": "关键是将“用户友好的地址解析”和“副作用目标的稳定性”分离。读和关系修订可接受多种拼写，破坏性实体删除则不能把每次重试解释成一个新搜索。锁必须覆盖解析前后的候选地址，否则并发重命名会让查找与写入间产生竞争；重复锁键又必须去重。它修复手工图谱接口一致性与一类重试安全边界，不是新检索算法，也不是端到端 exactly-once 或跨图/向量/KV 的分布式事务。",
+  "results": [
+    {
+      "claim": "作者报告原始拼写在创建后无法稳定用于关系操作，现有回归用例覆盖四种字符规则。",
+      "evidence": "生命周期参数集包含全角括号、HTML 空格实体、成对引号、全角空格；测试检查重复关系拒绝、反向编辑及删除。测试用固定 8 维全一向量替代真实 embedding，LLM 回调被设置为一调用就失败，因此不是检索效果评测。无论文实验表或准确率指标。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/api/routes/test_graph_manual_name_resolution_lifecycle.py#L34-L165"
+    },
+    {
+      "claim": "重复实体删除不会因为原目标消失而转向另一个节点。",
+      "evidence": "两种用例：第一次成功，或节点删除后注入追踪清理异常。第二次精确删除均应返回 404，规范化形式的另一节点必须保持存在。是公开回归断言，非本次独立运行结果。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/api/routes/test_graph_manual_name_resolution_lifecycle.py#L297-L348"
+    },
+    {
+      "claim": "重复锁键的修复有针对性超时回归，而非吞吐基准。",
+      "evidence": "测试获取 [k,k] 并断言引用计数只为 1，使用 5 秒 wait_for 防止挂死。5 秒是测试超时阈值，不是性能收益；作者描述旧自环删除可等待至 180 秒 admin hold ceiling，也不能称实测延迟下降 180 秒。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/kg/test_keyed_lock_async_registry.py#L280-L306"
+    },
+    {
+      "claim": "官方报告大范围本地测试通过，未独立复现。",
+      "evidence": "PR 报告 tests/api、tests/kg、tests/pipeline 共 5015 passed、204 skipped，另 tests/extraction、tests/utils 与文档预算测试 791 passed，并报告 ruff 检查通过。这些是作者报告，不能推出所有远程数据库、并发负载和生产恢复已验证。",
+      "source": "https://github.com/HKUDS/LightRAG/pull/4395"
+    }
+  ],
+  "limitations": [
+    "截至本次核查已合并 main（377cd244），最新正式发行仍是 2026-09-02 的 v1.5.7；直接安装这个旧正式版不包含本改动。",
+    "名称规范化不是实体语义消歧。历史原始名和规范化名同时存在时，依然可以是两个不同节点，不能自行清洗为一个。",
+    "查询解析不持锁，随后删除需使用已确认的存储名并自行处理并发变更；404 提示不能被客户端自动解释成新的删除授权。",
+    "此处测试是真实本地存储加合成向量与禁止 LLM；没有真实模型问答质量、远程后端全矩阵或生产并发压力证据。",
+    "本次只静态阅读，未安装、运行测试、执行任何真实知识库删除或测量效果；原有跨存储部分失败与恢复限制不能因这次修复忽略。"
+  ],
+  "engineering_notes": [
+    "实际增量：关系与查询入口解析一致、重复键锁去重、自环清理和错误码收敛。实体 exact-only 删除是保留现有安全契约，不应宣传为新增全局幂等删除系统。",
+    "最小试用建议（未执行）：在隔离环境固定 377cd244，用项目测试依赖运行三个相关测试文件：test_graph_manual_name_resolution_lifecycle.py、test_graph_relation_edit_delete_name_normalization.py、test_keyed_lock_async_registry.py；不接生产知识库。",
+    "接入建议：客户端保存创建响应的存储名称；编辑和查询可接受原始拼写，但删除审核界面展示精确存储键，失败重试复用同一个键，不根据 404 自动转删。",
+    "验收优先级：四类规范化生命周期、旧名与新名同时存在、节点删除后故障、成功后重发、自环清理、锁释放；随后再加所用远程后端的并发/取消测试。",
+    "MIT 开源。适合人工审核与修订型 RAG 的维护工具，不增加 GPU 训练要求；实际服务仍继承原有数据库、embedding 和权限部署要求。"
+  ],
+  "sources": [
+    {
+      "title": "官方 PR #4395：问题、合并时间与作者测试报告",
+      "url": "https://github.com/HKUDS/LightRAG/pull/4395"
+    },
+    {
+      "title": "固定提交图操作实现",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/lightrag/utils_graph.py"
+    },
+    {
+      "title": "固定提交键锁实现",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/lightrag/kg/shared_storage.py"
+    },
+    {
+      "title": "真实本地存储的 REST 生命周期测试",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/api/routes/test_graph_manual_name_resolution_lifecycle.py"
+    },
+    {
+      "title": "关系编辑/删除的隔离单元测试",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/api/routes/test_graph_relation_edit_delete_name_normalization.py"
+    },
+    {
+      "title": "重复键锁回归测试",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/tests/kg/test_keyed_lock_async_registry.py"
+    },
+    {
+      "title": "图谱编程接口及名称契约",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/docs/ProgramingWithCore.md"
+    },
+    {
+      "title": "最新正式发布 v1.5.7",
+      "url": "https://github.com/HKUDS/LightRAG/releases/tag/v1.5.7"
+    },
+    {
+      "title": "固定提交 MIT 许可证",
+      "url": "https://github.com/HKUDS/LightRAG/blob/377cd244eca1a784f4099d5d0410dbbaf7da4235/LICENSE"
+    }
+  ],
+  "read_scope": "已阅读官方 PR #4395 正文和全量变更列表，固定合并提交的名称解析辅助函数、关系创建/编辑/删除与实体删除相关实现，键锁构造/获取段，完整 REST 生命周期测试，关系编辑删除测试变更与重复锁键测试，相关编程文档和 MIT 许可证，并查询最新正式 release。不是整仓审计；没有论文全文可研读，未执行代码或测试。合并时间为 2026-11-13 18:19:30 UTC，即北京时间 11月14日02:19:30；源码日期与正式版日期分开记录。"
+}
