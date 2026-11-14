@@ -1,0 +1,95 @@
+{
+  "id": "deepagents-search-symlink-scope",
+  "title": "Deep Agents 0.7.38：批量搜索的审批范围不再被符号链接悄悄扩大",
+  "problem": "持续运行的研究或编码 Agent 常先对某个工作目录做 ls、glob、grep，再把结果交给模型。此前已有 allow/deny/interrupt 文件权限和符号链接目标检查，但批量输出对 interrupt 项的处理有缺口：搜索 /work 本身没有触发审批，/work 内的链接却可能指向需审批的 /secrets，于是本次未覆盖的受保护结果进入输出。11月13日合并的 #7706 修复这一具体边界；它不是新多 Agent 架构，也不是把所有符号链接禁用。",
+  "inputs": "不涉及模型训练或新权重。输入是 FilesystemMiddleware 的 ls/glob/grep 请求参数、按序匹配的 FilesystemPermission 规则，以及后端给出的文件条目或 grep 匹配。真实路径解析针对 FilesystemBackend（含 CompositeBackend 路由）；其他后端按原路径处理。示例测试使用隔离临时目录、普通 notes.txt、指向受保护目录和文件的两种符号链接，非真实用户凭据。",
+  "outputs": "输出仍是原工具的文件路径列表或 grep 结果，但会移除显式 deny 的项、无法安全解析的项，以及命中 read/interrupt 且实际位于本次搜索审批范围外的路径或链接目标。被过滤的项不会自动新增一轮审批；若调用直接覆盖受保护范围，原有 HumanInTheLoopMiddleware 审批路径仍应发挥作用。",
+  "pipeline": [
+    {
+      "title": "1. 在工具调用入口确定原有权限决策",
+      "explanation": "输入为请求 path/pattern 与 read 权限规则。已有中断谓词判断搜索子树是否可能与规则的字面前缀重叠；直接搜索受保护链接目标可以触发审批。输出是继续、拒绝或等待人审。此次改动补的是批量结果边界，不取代这一步。"
+    },
+    {
+      "title": "2. 为本次批量调用计算 scope",
+      "explanation": "_bulk_scope 检查是否存在 read/interrupt 规则；若没有，返回 None，保持原有过滤方式。若有，scope 包含请求路径及其后端解析后的真实目标。glob 的绝对 pattern 额外加入其固定锚点，含 .. 的相对 pattern 将 / 加入 scope，反映该调用本身可能覆盖的更宽范围。"
+    },
+    {
+      "title": "3. 获取后端结果并逐项解析",
+      "explanation": "ls/glob 得到 FileInfo，grep 得到 GrepMatch。过滤器读取每项 path，通过 FilesystemBackend 或 CompositeBackend 解析真实路径；目录项兼顾末尾斜杠的规则匹配形式。解析报 ValueError/OSError/RuntimeError 时保守过滤，不把无法解析等同于可访问。"
+    },
+    {
+      "title": "4. 区分禁止访问与需另行审批",
+      "explanation": "原路径或真实目标匹配 deny 即丢弃；否则，当任一候选路径命中 interrupt 且不属于 scope 的任何根时丢弃。保留合法范围内结果，不把已进入审批覆盖范围的普通 interrupt 项一概删掉。每次调用的路径判定被缓存，避免同一路径反复解析。"
+    },
+    {
+      "title": "5. 在同步、异步接口统一输出",
+      "explanation": "ls、glob、grep 的同步与异步实现均把 scope 传给对应过滤器，然后沿原来的格式化流程生成 ToolMessage。grep 保留原错误/截断标识；这不是重新执行查询，也没有改变模型的推理或生成机制。"
+    }
+  ],
+  "mechanism": "关键是把“这个路径需要审批”与“本次调用的审批判断到底覆盖哪些路径”区分开。不能只看模型提交的字面路径，也不能仅在 read_file 时检查，因为 grep 本身会返回正文。该补丁将原路径、真实路径及 bulk scope 共同用于输出过滤。规则按列表顺序首次匹配，未命中默认 allow；因此修复依赖部署者配置正确的权限和审批中间件，不能替代最小权限环境。",
+  "results": [
+    {
+      "claim": "已发布可获取的软件修复，不仅是设计提案。",
+      "evidence": "PR #7706 于2026-11-13 14:14:31 UTC合并；deepagents==0.7.38 于14:32:22 UTC发布（北京时间11月13日22:32:22），发布页附 wheel/sdist。前一版本为0.7.37。",
+      "source": "https://github.com/langchain-ai/deepagents/releases/tag/deepagents%3D%3D0.7.38"
+    },
+    {
+      "claim": "官方新增测试明确断言范围外受保护链接及内容不进入批量输出。",
+      "evidence": "test_bulk_results_needing_approval_outside_search_root_dropped 覆盖3种工具×同步/异步，共6个参数组合：保留 notes；不出现 alias.txt、/work/link、TOPSECRET。这里是源码中的断言与测试设计，不是本次执行结果，也不是安全漏洞覆盖率或生产成功率。",
+      "source": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/libs/deepagents/tests/unit_tests/test_permissions.py#L1935-L1956"
+    },
+    {
+      "claim": "修复并不禁止显式进入审批范围的搜索。",
+      "evidence": "test_bulk_results_within_paused_scope_kept 包含5个调用组合，检查中断谓词为真，并在测试调用工具后保留 key.txt。该单元测试不能等同于真实人工审批UI、分布式恢复或完整线上批准流程验证。",
+      "source": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/libs/deepagents/tests/unit_tests/test_permissions.py#L1958-L1973"
+    },
+    {
+      "claim": "没有公布算法性能、任务成功率或延迟收益。",
+      "evidence": "所读PR、发布说明和新增测试只支持权限边界修复；未提供数据集、对比实验表、吞吐/token费用或误审批率。无需训练GPU，不能由此宣称长程Agent更聪明或生产安全已证明。",
+      "source": "https://github.com/langchain-ai/deepagents/pull/7706"
+    }
+  ],
+  "limitations": [
+    "本次只静态阅读源码、测试和发行元数据，未安装、未运行测试、未调用模型，不能声称独立复现。",
+    "这是批量结果过滤；后端查询可能已经读取过匹配内容。不能据此保证后端日志、trace、缓存或其他旁路从未接触这些字节。",
+    "没有 read/interrupt 规则则不构建该 scope；未命中规则默认 allow。权限配置不当时，升级本身不会自动建立秘密目录隔离。",
+    "真实路径解析针对支持的 FilesystemBackend 及其复合路由。不能泛化为任意远程文件系统、执行工具或恶意后端的完整防护。",
+    "直接从 / 搜索、绝对 glob 或含 .. 的 pattern 可能对应更广 scope，必须审查调用的实际审批范围，不能把此补丁理解为强制限制在最初的子目录。",
+    "源码对提供命令执行的后端一般不支持此文件权限配置，除非权限全限定在可路由区域；该机制不是操作系统沙箱，也未证明能防 TOCTOU 符号链接竞态。",
+    "项目包元数据标记 Beta。许可证MIT，Python>=3.11,<4，依赖LangChain>=1.5、langchain-core>=1.8等；上游升级兼容性需要单独核对。"
+  ],
+  "engineering_notes": [
+    "工程判断：对自主研究Agent而言，grep正文同样是数据外流面。应把工具输出最小化与调用前审批一起设计，不能只保护 read_file。",
+    "最小试用计划（尚未执行）：在隔离环境固定deepagents==0.7.38及锁定依赖；创建仅含公开假数据的 /work 与 /secrets，建立文件及目录symlink；配置 /secrets/** 的read/interrupt，分别测试ls/glob/grep同步和异步路径。先验证 /work 查询不返回受保护内容，再验证直接搜索链接时触发审批并按批准/拒绝分支处理。",
+    "用0.7.37作为对照，记录工具原始请求、解析后的scope、输出中是否出现假秘密、审批次数与取消结果。不要使用真实凭据测试，也不要在日志中记录真实敏感内容。",
+    "集成成本主要在依赖升级、现有自定义后端与权限规则兼容、HITL/checkpoint恢复验证，不需要重新训练模型。若已有独立容器/挂载隔离，应保留，而不是以中间件过滤替代。",
+    "生产前追加自定义后端、宽范围glob、并发改链接、截断结果和trace旁路测试；这些是本报告建议，不是作者已完成的结果。"
+  ],
+  "sources": [
+    {
+      "title": "官方PR #7706",
+      "url": "https://github.com/langchain-ai/deepagents/pull/7706"
+    },
+    {
+      "title": "0.7.38官方发行",
+      "url": "https://github.com/langchain-ai/deepagents/releases/tag/deepagents%3D%3D0.7.38"
+    },
+    {
+      "title": "固定发行提交：文件系统中间件",
+      "url": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/libs/deepagents/deepagents/middleware/filesystem.py"
+    },
+    {
+      "title": "固定发行提交：权限测试",
+      "url": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/libs/deepagents/tests/unit_tests/test_permissions.py"
+    },
+    {
+      "title": "固定发行提交：依赖与许可元数据",
+      "url": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/libs/deepagents/pyproject.toml"
+    },
+    {
+      "title": "MIT许可证",
+      "url": "https://github.com/langchain-ai/deepagents/blob/c858b3641b13fb3f40fe3a12515517b81fb8a744/LICENSE"
+    }
+  ],
+  "read_scope": "已读取官方PR正文及完整两文件diff、0.7.38发行元数据；按固定发行提交读取权限定义、规则匹配、真实路径解析、_bulk_scope/_is_denied、过滤器、ls调用路径及新增测试和symlink fixture，核对依赖与MIT许可证。不是论文全文研读；未逐行审计整个仓库，未执行测试，未验证线上人审、竞态或第三方生产证据。核查日期2026-11-14 UTC。"
+}
