@@ -1,0 +1,74 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+---
+
+# LightRAG PDF解析改用受限子进程：从上传大小转向文档计算预算
+
+核查时点：2026-11-15T00:06:12.102151Z
+
+阅读范围与日期：已读PR说明、设计文档、pdf_budget与pdf_worker新增实现、extractors接线变更及关键测试（资源限制、异常、差分、并发、父进程死亡）；未读整个LightRAG代码库，未独立运行。合并时间2026-11-14T13:34:51Z；核查日期2026-11-15。
+
+## 核心问题
+
+低样本或批量知识库入库通常把上传大小当作风险边界，但压缩PDF可重复引用内容流、字体映射和表单，导致小文件重复解析大量内容。旧版在服务进程中调用pypdf，单对象限制并不能约束整份文档。11月14日合并的PR #4400将legacy PDF文本提取迁到受限子进程；这不是OCR模型升级，也不是检索质量改进。
+
+## 输入
+
+输入是PDF字节、可选密码、文件名以及CPU/内存/内容字节/字符预算。仅涉及legacy pypdf提取路径，无训练、无模型权重。调用端通过stdin传递JSON头及PDF，不把密码放进命令行。
+
+## 输出
+
+成功时返回逐页文本；超预算时抛出PdfExtractionBudgetError并让文档进入FAILED，不应拿部分文本继续入库。其他解析错误转为LegacyExtractionError并保留错误类型名称与消息；原异常类型不跨进程返回。
+
+## 关键机制
+
+关键增量是把无法可靠预测的解析器内部成本交给进程边界限制，而不是在visitor回调中镜像pypdf资源解析逻辑。内容/字符阈值负责快速拒绝常见过量输入，watchdog、内核rlimit与父进程超时分层兜底。进程槽位防止取消的旧入库任务和新任务叠加无限子进程；取消线程任务并不立即杀死已启动提取，它会继续占槽至完成或超限。
+
+## 逐步流程
+
+1. **读取预算并取得进程级槽位**：extract_pdf_text从环境读取限制；每个服务进程用Condition维护活动子进程数。默认MAX_PARALLEL_PARSE_NATIVE=5，多个入库任务共享此上限；满额调用在自己的线程中等待。输出是一个获准运行的提取请求，不是全服务集群总并发额度。
+
+2. **启动最小工作进程并传输输入**：父进程执行python -P pdf_worker.py，stdin输入头与PDF，stdout和stderr接临时文件。worker只在顶层加载标准库，再按父进程传来的模块路径导入pypdf，避免重复加载整个LightRAG。
+
+3. **先做文档级确定性检查**：打开PDF、处理密码后检查页面内容解码量，默认上限为min(256MiB,max(16MiB,100×文件大小))；共享对象只解码遍历一次，但各页引用仍计入工作量。逐页提取后累计文本字符，默认上限33554432。内容检查可能漏计字体等成本，不能作为完整安全边界。
+
+4. **运行中施加预算**：子进程每0.2秒检查CPU时间、可用的驻留内存指标和POSIX父进程存活。默认CPU120秒、内存1024MiB，POSIX再设RLIMIT_CPU和地址空间限制；父进程以4×CPU预算+30秒墙钟超时兜底并终止未完成子进程。
+
+5. **只提交完整成功结果**：父进程读取状态文件尾部，只有kind=ok且退出码0才读回UTF-8文本。超时、预算拒绝或解析错误交给上游失败处理，不自动降级为没有进程资源限制的路径。输出可供后续切块与索引，但本改动本身不改变这些算法。
+
+## 事实与作者证据（未独立复现）
+
+### 作者报告小PDF也能触发大计算成本
+PR的单核pypdf 6.21.4示例：59KB文件中4页复用20MB内容流，旧路径耗时150秒并生成约8200万字符。这是构造压力样例，不是通用文档集准确率评测。 [原始证据](https://github.com/HKUDS/LightRAG/pull/4400)
+
+### 作者报告服务器仍可响应并发解析
+作者在带PostgreSQL和鉴权的服务器上传20份慢PDF，最多同时5个子进程，/health低于0.5秒；未提供可跨硬件比较的完整生产SLA。 [原始证据](https://github.com/HKUDS/LightRAG/pull/4400)
+
+### 可检查测试覆盖失败和兼容分支
+新增测试覆盖CPU/内存/墙钟、父进程消失、信号退出、并发槽位以及150种seed生成的畸形PDF与原始pypdf差分。作者报告parser相关1968通过；本轮只读测试，未运行验证。 [原始证据](https://github.com/HKUDS/LightRAG/blob/d83362bd2e37902aa2e3d4fa2f2905f05a79ef2d/tests/parser/test_legacy_pdf_budget.py)
+
+## 限制与未知
+
+- 仅保护legacy PDF路径，不是文件系统/网络权限沙箱，也不解决提示注入、版权和采集授权。
+- Windows没有此实现的内存限制和POSIX父进程死亡检测；macOS不强制RLIMIT_AS，依赖watchdog内存检查。
+- C调用持有GIL可阻塞watchdog，内核限制和父超时是后备；非正预算会关闭对应限制。
+- 默认每个服务进程最多5个子进程，每个可消耗一个CPU核心及约1GiB预算，部署多个worker需另算总资源。
+- 关闭PDF_EXTRACT_IN_SUBPROCESS后仅剩内容/字符检查；合法复杂文档也可能被时间预算拒绝，不应自动放宽或静默降级。
+- 代码已合入main，不等于正式发行或已在生产验证；本轮未安装、运行或独立复现实验。
+
+## 工程建议，不是实测结论
+
+- 最小试用：固定该合并提交，在隔离Linux测试服务设置较低CPU预算，依次上传普通PDF和官方构造测试，确认成功/FAILED、错误原因及临时进程清理；不要在生产拿未知文件做压力测试。
+- 同时测不同worker数、取消后重提和重启，记录每文档CPU/RSS、入库拒绝率、服务P95和队列等待；模型问答质量不是本改动的验收指标。
+- Python/pypdf最低版本提高到6.21.4，部署必须允许启动Python子进程和写临时文件。无需GPU或训练，成本主要是并发CPU、内存与少量启动开销。
+- 工程判断：对持续采集论文与Agent自动入库，明确失败比把半份文本静默索引更可靠；但数据权限、敏感信息过滤及输出文件保留策略仍需单独实现。
+
+## 原始来源
+
+- [官方PR与作者测试报告](https://github.com/HKUDS/LightRAG/pull/4400)
+- [固定提交设计说明](https://github.com/HKUDS/LightRAG/blob/d83362bd2e37902aa2e3d4fa2f2905f05a79ef2d/docs/design/PdfExtractionBudget.md)
+- [父进程实现](https://github.com/HKUDS/LightRAG/blob/d83362bd2e37902aa2e3d4fa2f2905f05a79ef2d/lightrag/parser/legacy/pdf_budget.py)
+- [工作进程实现](https://github.com/HKUDS/LightRAG/blob/d83362bd2e37902aa2e3d4fa2f2905f05a79ef2d/lightrag/parser/legacy/pdf_worker.py)
+- [测试实现](https://github.com/HKUDS/LightRAG/blob/d83362bd2e37902aa2e3d4fa2f2905f05a79ef2d/tests/parser/test_legacy_pdf_budget.py)
