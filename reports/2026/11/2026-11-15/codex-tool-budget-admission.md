@@ -1,0 +1,67 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+---
+
+# Codex 工具预算准入：排队、审批和 MCP 交接前再次检查
+
+核查时点：2026-11-15T00:06:12.102151Z
+
+阅读范围与日期：2026-11-15核查。已逐项阅读固定提交 f226c9ccfb9762eb5b8fa5d45b43262304f5a360 的修改说明、13个文件差异中准入/终态/trace实现及两组相关完整新增测试逻辑；不是全仓库审计，不是论文全文研读。测试结论仅为源码断言，未独立执行。提交committer时间为2026-11-14T23:52:50Z，即北京时间11月15日07:52:50。
+
+## 核心问题
+
+长运行 Agent 的预算可能被并行任务消耗。若仅在把工具放进队列时检查一次，工具在等待执行槽、审批或生命周期回调期间预算耗尽，之后仍可能开始新操作。此次修改针对这一时间窗口，不是增加模型能力，也不是取消已经产生的外部副作用。
+
+## 输入
+
+输入是一次工具调用（工具名、参数、call_id）、共享 rollout 预算停止状态、取消令牌、执行槽与生命周期回调。MCP 路径还需要已协商连接与请求准备结果。这里的预算是运行时计账状态，不等同于银行卡或供应商账户的硬性余额。
+
+## 输出
+
+允许调用时保留正常工具结果；拒绝新调用时返回明确的 aborted 输出，并把生命周期与分发 trace 记为 Aborted。已交给远端的请求允许完成并保留结果，不伪装成从未执行。另将 handler 的开始时刻和调度等待区分，便于解释运行耗时。
+
+## 关键机制
+
+真实增量是多阶段准入检查与终态一致性。tools_stopped 是共享状态；越靠近开始副作用的边界越需要重查。补丁同时给 ToolOutput 增加 was_aborted，避免正常返回的中止对象被归类为成功。MCP 的停止界限明确落在 handoff 之前：交接后仍可能发生真实工作，必须读回结果。此机制减少旧准入许可被延迟使用的风险，但不是任意并发条件下的事务式费用上限。
+
+## 逐步流程
+
+1. **等待槽位后重新准入**：调用先取得共享或独占执行槽；取得槽后再次读取 tools_stopped。若等待时预算已耗尽，直接生成调度前中止结果，不进入 handler。输出是正常派发或 aborted before dispatch。
+
+2. **在回调与审批之后再检查**：环境解析、前置hook、审批及开始观察者都可能等待。注册器在即将轮询 handler 前再次检查预算；超限时释放调用占用、记录 Aborted，并通知生命周期结束。这样不把早先的准入判断当永久通行证。
+
+3. **MCP 在实际发送前做最后检查**：远程工具先完成连接和请求准备，PreparedMcpCall.call_with_admission 在交给peer的元数据回调里执行 admit。若此时预算已停，通过专门错误保留本地准入失败语义，不把它仅当远端故障。
+
+4. **完成状态只认领一次**：ToolCallState 用 OnceLock 保存终态和 handler_started_at。若取消恰好在完成回调阶段到来，已经完成的调用保留真实成功结果；未开始的调用记为中止。终态、模型可见输出和trace不应互相矛盾。
+
+## 事实与作者证据（未独立复现）
+
+### 官方测试源码覆盖排队和启动回调期间耗尽预算。
+completed_and_budget_stopped_tools_report_their_own_lifecycle 构造并行与独占假工具：预算耗尽后，排队工具调用计数应为0，已执行工具计数为1；处于开始回调的工具返回 handler-start 前中止，已完成者仍为 Completed。这里是单元测试断言，不是本次实跑或生产指标。 [原始证据](https://github.com/openai/codex/blob/f226c9ccfb9762eb5b8fa5d45b43262304f5a360/codex-rs/core/src/tools/parallel.rs)
+
+### MCP 测试区分发送前和发送后的预算停止。
+mcp_budget_stop_at_handoff 使用 wiremock 测试端点：Start阶段停止时请求计数预期0且终态Aborted；Result阶段停止时请求计数预期1，保留成功完成。没有真实服务、计费扣款或编码质量实验。 [原始证据](https://github.com/openai/codex/blob/f226c9ccfb9762eb5b8fa5d45b43262304f5a360/codex-rs/core/src/session/turn_start_mcp_tests.rs)
+
+## 限制与未知
+
+- 核查到的是 main 固定源码提交，非用户当前桌面或CLI已拥有该能力；发行页最新正式版仍为0.169.0，未验证alpha资产是否包含此提交。
+- 已开始或已发送到MCP服务的工作允许完成；这不是硬中断、自动回滚或防止全部超支的保证。
+- 预算状态上报具有时序边界，不能据此声称任意外部副作用exactly-once；用户取消与预算停止也是不同事件。
+- 本次未编译、运行测试、安装软件或执行真实远程调用；没有吞吐、延迟、费用下降或任务成功率数字。
+
+## 工程建议，不是实测结论
+
+- 最小验证：在隔离源码构建中分别运行上述两个命名回归测试；用假MCP服务器计数，先复现旧父提交的等待窗口，再比较固定提交，避免对真实付费或写入接口试错。
+- 接入自有Harness时借鉴三层门：出队、handler开始、远程发送。记录call_id、预算版本、终态和远端回执，不只记录模型是否提出了工具调用。
+- 对已发送但结果未知的写操作，先按幂等键或状态查询恢复；不要因预算停止就自动重发。
+- 部署前固定Rust依赖和提交，检查预算配置及host计账接线是否实际启用。该研究只提出验证路径，不建议直接替换稳定生产版本。
+
+## 原始来源
+
+- [官方固定提交与修改说明](https://github.com/openai/codex/commit/f226c9ccfb9762eb5b8fa5d45b43262304f5a360)
+- [工具注册器准入实现](https://github.com/openai/codex/blob/f226c9ccfb9762eb5b8fa5d45b43262304f5a360/codex-rs/core/src/tools/registry.rs)
+- [MCP交接准入实现](https://github.com/openai/codex/blob/f226c9ccfb9762eb5b8fa5d45b43262304f5a360/codex-rs/codex-mcp/src/binding.rs)
+- [MCP工具错误与结果保留](https://github.com/openai/codex/blob/f226c9ccfb9762eb5b8fa5d45b43262304f5a360/codex-rs/core/src/mcp_tool_call.rs)
+- [正式及预览发行列表](https://github.com/openai/codex/releases)
