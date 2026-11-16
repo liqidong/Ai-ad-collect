@@ -1,0 +1,96 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+---
+
+# LightRAG 重排容错：区分不可恢复配置错误与瞬时故障，而不是一律重试
+
+来源时点：2026-11-15 合并；核查：2026-11-16（北京时间）。
+
+## 核心问题与新变化
+
+已有查询链把所有 aiohttp.ClientError 都视为可重试，错误 API key、余额不足、错误 URL 等不会自行恢复的失败仍请求三次。更隐蔽的是，查询层最终会退回原候选顺序，用户可能只感到变慢，而没有意识到重排已经失效。此次增量不是新检索算法，也不改变向量召回或模型权重，而是修正查询服务的错误分类与可观测性。2026-11-15T15:28:38Z 合入 main，相对上一期 PDF 子进程预算属于不同链路的新修复。
+
+## 输入
+
+推理/查询阶段输入 query 字符串、候选文档字符串列表、重排模型名、端点、API key、可选 top_n 与服务商请求格式；另一路输入是 HTTP 状态或连接/响应体异常。本项不训练模型，无训练数据、训练输入输出及新权重。
+
+## 输出
+
+成功时输出 index 与 relevance_score 列表，随后映射回候选文档并附 rerank_score；不可恢复失败立即抛出原服务商异常，瞬时失败最多三次尝试后抛出最后一次原异常。外层 apply_rerank_if_enabled 捕获异常、记录原因并返回原候选顺序，而不是保证查询已完成有效重排。
+
+## 分步流程
+
+### 1. 候选内容进入重排适配层
+
+输入召回文档，apply_rerank_if_enabled 从 content/text/chunk_content/document 等字段取文本，连同 query、top_n 交给配置的 rerank_model_func。输出服务商请求参数；Cohere、Jina、Aliyun 使用共享 generic_rerank_api。
+
+### 2. 发请求并保留服务商错误
+
+generic_rerank_api 按标准或 Aliyun 嵌套格式组成 JSON，执行 POST。非 200 响应读取错误文本并构造带 status/message 的 ClientResponseError；200 则解析 JSON，规范化索引与分数。输出有效结果或可分类异常。
+
+### 3. 按恢复可能性决定是否再请求
+
+is_transient_aiohttp_error 先检查 ClientResponseError：408/409/429 或 status>=500 才重试；其他状态立即停止。没有该响应异常时，仅连接类 ClientConnectionError 和响应体截断 ClientPayloadError 重试。InvalidURL 等本地配置错误不重试。输出停止决定或下一次尝试。
+
+### 4. 有限退避与错误透传
+
+tenacity 最多三次尝试，指数等待 multiplier=1、min=4、max=60。三次均失败时等待两次各4秒，即固定策略产生8秒退避，另加请求耗时；reraise=True 让上层看到最后原异常，而不是 RetryError 包装。
+
+### 5. 成功排序或明确降级
+
+成功结果映射回原文档，增加 rerank_score；失败被外层捕获后返回原列表。后续仍执行分数过滤、chunk_top_k 和上下文 token 截断。因缺失 rerank_score 时过滤代码默认1.0，不能从最终查询成功判断重排健康，需要单独监测降级。
+
+## 机制
+
+核心是把重试判定从宽泛异常基类换成共享谓词，并将最后原异常透传给调用者。这样同一上层降级策略下，永久错误少走两次无效请求，连接/限流/服务器瞬时错误仍保留有限恢复机会。该谓词也供 jina_embed 使用，但此次重点是补齐 generic_rerank_api。它不是断路器，不会跨查询记住坏配置，因此连续查询仍各尝试一次；也没有重训、检索质量提升或端到端延迟保证。
+
+## 效果与证据
+
+### 源代码可以确认：永久错误一次请求，瞬时错误最多三次；原异常类型保留。
+
+离线回归针对400/401/402/403/404/422断言post.call_count==1；对408/409/429/500/502/503/504断言3；InvalidURL断言1；三种连接/截断异常断言3。测试使用Mock/AsyncMock并关闭真实退避，本文只读代码，未执行。
+
+[原始证据](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/tests/test_rerank_retry_classification.py)
+
+### 503之后恢复200时能返回第二次请求的分数，而不是立即降级。
+
+测试构造503→200，断言两次请求、返回index=1及relevance_score=0.9。该数字是合成测试分数，不是准确率或真实相关性评测。
+
+[原始证据](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/tests/test_rerank_retry_classification.py)
+
+### 永久错误路径理论上省去两次请求和8秒退避，不代表正常查询快8秒。
+
+stop_after_attempt(3)与wait_exponential(multiplier=1,min=4,max=60)决定原失败路径两次等待各4秒；新谓词立即退出。作者PR报告相关测试83 passed，新测试在旧main有17/18失败。测试并非生产基准，本次未复现；无检索数据集、NDCG/Recall或论文表号。
+
+[原始证据](https://github.com/HKUDS/LightRAG/pull/4420)
+
+## 限制与未知
+
+- 开放状态：代码已合并 main，可检查固定提交；未核实已进入正式发布包，不建议只更新 pip 后假定具备此修复。
+- 200但非JSON的响应在此rerank路径触发ContentTypeError(status200)，不再重试。不要与同日PR4279的OpenAI兼容completion畸形响应重试混为一谈，两条路径策略不同。
+- 重排失败仍降级到原顺序，可能降低结果质量而不中断查询；这是保留的行为，不是本修复解决了排序质量。
+- 分类依据状态码与异常类型，不理解业务语义；409或所有>=500是否真可恢复仍取决于提供商。
+- 未新增跨请求断路器、全局费用预算或基于Retry-After的等待策略；未验证并发、限流风暴及真实服务商兼容性。
+- 本文没有安装、执行测试或调用付费服务；作者测试与源码推断不等于独立复现。
+
+## 工程建议（未实测）
+
+- 最小试验：在独立测试环境固定上述提交，检查依赖已满足后执行 python -m pytest tests/test_rerank_retry_classification.py；此处仅给步骤，未执行。无需真实API key，测试替换ClientSession并使用合成响应。
+- 接入成本较低：使用内置三种rerank适配器的路径复用共享分类函数；自定义rerank_model_func若绕过generic_rerank_api则不会自动获益，应单独检查。
+- 建议增加rerank成功率、fallback计数、按状态码重试次数与P95查询延迟监控；配置失效应告警，避免将降级后的可回答误判为完整RAG健康。
+- 先比较401、429、503→200、200非JSON及无效URL五种故障，验收请求次数、错误保真和候选顺序，不只看最终有没有文本输出。
+- 对算法工程的价值是把服务容错与排序效果分离诊断。若评测NDCG下降，先确认重排是否实际执行，再调模型与chunk参数。
+
+## 阅读范围
+
+已阅读 PR4420 说明与变更页、固定合并提交的完整 _aiohttp_retry.py、rerank.py、完整 test_rerank_retry_classification.py，以及 utils.py 中 apply_rerank_if_enabled、normalize_rerank_result、process_chunks_unified 的上下文。不是论文全文研读，也不是全仓审计；没有执行代码或独立性能实验。来源合并时间2026-11-15T15:28:38Z，核查日期2026-11-16（UTC+8）。
+
+## 原始来源
+
+- [LightRAG PR #4420：永久重排错误不再重试（2026-11-15 合并）](https://github.com/HKUDS/LightRAG/pull/4420)
+- [固定提交：共享异常分类函数](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/llm/_aiohttp_retry.py)
+- [固定提交：generic_rerank_api 与三种适配器](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/rerank.py)
+- [固定提交：离线重试回归测试](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/tests/test_rerank_retry_classification.py)
+- [固定提交：重排失败后的查询降级逻辑](https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/utils.py)
