@@ -1,0 +1,98 @@
+{
+  "date": "2026-11-16",
+  "title": "算法研究日报",
+  "edition_label": "第2026-11-16期 · 重排容错与降级可观测性",
+  "summary": "本期一项完整源码解读：LightRAG按错误可恢复性决定重排重试，避免永久配置错误反复请求；查询仍可能降级回原候选顺序，不能把有回答当成重排正常。数字人定向核查未发现可确认的新增能力，不重复旧权重与演示。",
+  "notice": "公开研究草稿。对照11月15日及14日报；仅列已完成原始代码研读的新增，其他筛查单独说明。未运行测试、模型、训练或生产部署，未上传用户数据。无新增仅限本轮核查范围，不代表全领域没有进展。",
+  "verified_at": "2026-11-15T23:59:59.782Z",
+  "items": [
+    {
+      "id": "lightrag-rerank-retry-classification",
+      "category": "知识库 / RAG",
+      "title": "LightRAG 重排容错：区分不可恢复配置错误与瞬时故障，而不是一律重试",
+      "finding": "LightRAG PR4420 新合入main：内置重排不再对坏key、余额不足、无效URL等永久错误一律重试，瞬时错误仍最多三次，最后原异常可见。与上期PDF资源预算不同，这是查询重排链的恢复策略修复。",
+      "relevance": "减少错误配置下无效请求和等待，并揭示“查询有回答但重排已降级”的诊断盲点；没有新的检索准确率结论。",
+      "action": "先用官方离线Mock测试验证401一次、429三次、503后成功两次，再监测fallback率与真实查询延迟。仅提供试验步骤，未安装运行。",
+      "caveat": "已合入main，正式发行包含情况未证实；作者83项测试通过未独立复现。200非JSON在重排路径不重试；失败仍返回原候选顺序。",
+      "recency_label": "2026-11-15 新合并代码 / 非新模型",
+      "source_date": "2026-11-15T15:28:38Z（main合并）；2026-11-16核查",
+      "sources": [
+        {
+          "title": "LightRAG PR #4420：永久重排错误不再重试（2026-11-15 合并）",
+          "url": "https://github.com/HKUDS/LightRAG/pull/4420"
+        },
+        {
+          "title": "固定提交：共享异常分类函数",
+          "url": "https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/llm/_aiohttp_retry.py"
+        },
+        {
+          "title": "固定提交：generic_rerank_api 与三种适配器",
+          "url": "https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/rerank.py"
+        },
+        {
+          "title": "固定提交：离线重试回归测试",
+          "url": "https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/tests/test_rerank_retry_classification.py"
+        },
+        {
+          "title": "固定提交：重排失败后的查询降级逻辑",
+          "url": "https://github.com/HKUDS/LightRAG/blob/5a877902b69af60204b2d00ebf635c4b8e20a0a0/lightrag/utils.py"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-16/lightrag-rerank-retry-classification.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "定向核查CAP4D、Kirschstein版FlexAvatar、SplatCtrlA、SoulX-FlashHead、SoulX-LiveAct和Alibaba LiveAvatar最近默认分支提交，均早于上期核查。arXiv cs.CV最近列表仍为11月13日196条。本轮无新增已核实重点，不将已有权重或旧实时演示重新推荐；未覆盖所有分支、外部权重资产和全领域。",
+      "sources": [
+        {
+          "title": "CAP4D官方仓库",
+          "url": "https://github.com/felixtaubner/cap4d"
+        },
+        {
+          "title": "FlexAvatar官方仓库",
+          "url": "https://github.com/tobias-kirschstein/flexavatar"
+        },
+        {
+          "title": "SplatCtrlA官方仓库",
+          "url": "https://github.com/xiangjun-xj/SplatCtrlA-release"
+        },
+        {
+          "title": "arXiv视觉近期列表",
+          "url": "https://arxiv.org/list/cs.CV/recent?skip=0&show=2000"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Docling 11月15日06:11:33 UTC合入PowerPoint Office 2016图表读取改进，本轮仅筛查提交说明，未完成源码与测试深读，暂不作为完整技术条目。MinerU、Crawl4AI最近默认分支提交均早于上期。本栏目无新增已完成深读重点，不等于没有源码更新。",
+      "sources": [
+        {
+          "title": "Docling图表解析提交",
+          "url": "https://github.com/docling-project/docling/commit/440492ac0d0e14952b32dda28fede7495611c899"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "Claude官方平台更新页最新仍为11月12日自托管Managed Agents，已在11月14期解读，本期无新增已核实重点。不重复Skill、工作流及旧模型迁移指南。",
+      "sources": [
+        {
+          "title": "Claude官方平台更新",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "status": "Codex main与alpha版本存在11月15日更新，但本轮未完成新接口代码深读，不以版本号单独凑条目；无新增已完成深读重点。部分Claude Code、LangGraph API查询受限，不能据此断言没有更新。",
+      "sources": [
+        {
+          "title": "Codex官方发行列表",
+          "url": "https://github.com/openai/codex/releases"
+        }
+      ]
+    }
+  ]
+}
