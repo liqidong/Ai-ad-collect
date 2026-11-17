@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-17",
+  "title": "算法研究日报",
+  "edition_label": "第2026-11-17期 · 子代理中断与恢复边界",
+  "summary": "本期一项完整源码解读：Codex 新增默认关闭的子代理输出项边界中断，将立即取消工具与保留当前输出项分开，并等待旧轮次终止再接收恢复输入。其他方向存在新提交或新论文列表，但未完成足够研读的内容不包装成成熟能力。",
+  "notice": "公开研究草稿。比较 11 月 16 日与 15 日报告，优先新增而不凑数；区分已读源码、测试断言和工程建议。未运行模型、测试、训练或生产部署，未上传任何用户数据。无新增结论仅指本次核查范围。",
+  "verified_at": "2026-11-16T23:59:38.676Z",
+  "items": [
+    {
+      "id": "codex-item-boundary-interrupt",
+      "category": "智能体 / 应用",
+      "title": "Codex 子代理中断：立即取消工具，让当前输出项完整落入历史",
+      "finding": "11 月 16 日合入的 Codex PR #61909 新增 interrupt_at_item_boundary，默认关闭。启用的 V2 子线程可保留当前输出项，同时取消工具；未执行调用记为 aborted，后续输出舍弃，并在旧轮次终止后开始后续输入。",
+      "relevance": "适合持续在线代理的停止、纠偏与恢复状态机。真实增量在历史一致性和执行控制，不是新模型、代码质量提升或外部副作用回滚。",
+      "action": "固定提交，先运行官方模拟 SSE 的消息/工具两类测试，再加入慢流、已派发工具和并发恢复输入的故障注入；不要直接接生产副作用工具。",
+      "caveat": "仅默认分支源码已核实，最新稳定版 0.169.0 早于该提交；本轮未编译或执行测试。仅 V2 子线程且需主动启用，取消延迟和远端副作用仍需测量。",
+      "recency_label": "2026-11-16 新合并源码，默认关闭",
+      "source_date": "PR 合并 2026-11-16T23:26:39Z；2026-11-17 北京时间核查。",
+      "sources": [
+        {
+          "title": "官方 PR #61909：子代理输出项边界中断",
+          "url": "https://github.com/openai/codex/pull/61909"
+        },
+        {
+          "title": "固定提交：开关条件、中断注册与工具取消",
+          "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/sampling_interrupt.rs"
+        },
+        {
+          "title": "固定提交：流式输出保留与工具结果归档",
+          "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/turn.rs"
+        },
+        {
+          "title": "固定提交：后续输入准入",
+          "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/turn_input.rs"
+        },
+        {
+          "title": "固定提交：轮次结束与空闲事件处理",
+          "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/tasks/mod.rs"
+        },
+        {
+          "title": "固定提交：流式 SSE 回归测试",
+          "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/tests/suite/agent_mailbox.rs"
+        },
+        {
+          "title": "官方稳定版本列表",
+          "url": "https://github.com/openai/codex/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-17/codex-item-boundary-interrupt.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "status": "CAP4D、Kirschstein 版 FlexAvatar、DEGAS、SplatCtrlA 默认分支自上一期核查时间起未返回新提交。arXiv cs.CV 已更新到 11 月 16 日，91 条新列表，不能沿用上期“仍为 11 月 13 日”的状态；本轮未完成这些新论文的全文研读，不据摘要推断有可直接接入的新能力。本栏目无新增已完成核实的重点条目，不等于全领域没有新增。",
+      "sources": [
+        {
+          "title": "CAP4D 官方提交",
+          "url": "https://api.github.com/repos/felixtaubner/cap4d/commits?since=2026-11-15T23:59:59Z&per_page=20"
+        },
+        {
+          "title": "FlexAvatar 官方仓库",
+          "url": "https://github.com/tobias-kirschstein/flexavatar"
+        },
+        {
+          "title": "DEGAS 官方仓库",
+          "url": "https://github.com/initialneil/DEGAS"
+        },
+        {
+          "title": "SplatCtrlA 官方仓库",
+          "url": "https://github.com/xiangjun-xj/SplatCtrlA-release"
+        },
+        {
+          "title": "arXiv 视觉近期列表",
+          "url": "https://arxiv.org/list/cs.CV/recent?skip=0&show=2000"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "status": "LightRAG 11 月 16 日有 emoji 源字符范围恢复、登录限速键以及 Markdown 图片处理等新合入。此次只完成提交筛查，未完成各自算法与边界测试研读，暂不入选完整解读；不重复昨天的重排错误分类。",
+      "sources": [
+        {
+          "title": "LightRAG 官方近期提交",
+          "url": "https://api.github.com/repos/HKUDS/LightRAG/commits?since=2026-11-15T23:59:59Z&per_page=20"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "status": "Docling 新增 LaTeX verb/minted 处理修复；MinerU 有 4.2.3 发布准备与工作进程恢复相关提交，未进一步核实发布包和运行结果。Crawl4AI 本轮时间窗无默认分支提交。本栏目未形成新增完整详解，不把提交标题当成熟功能证明。",
+      "sources": [
+        {
+          "title": "Docling 官方近期提交",
+          "url": "https://api.github.com/repos/docling-project/docling/commits?since=2026-11-15T23:59:59Z&per_page=20"
+        },
+        {
+          "title": "MinerU 官方近期提交",
+          "url": "https://api.github.com/repos/opendatalab/MinerU/commits?since=2026-11-15T23:59:59Z&per_page=20"
+        },
+        {
+          "title": "Crawl4AI 官方提交",
+          "url": "https://api.github.com/repos/unclecode/crawl4ai/commits?since=2026-11-15T23:59:59Z&per_page=20"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "status": "Claude 官方平台更新页新增 11 月 16 日旧型号文本水印覆盖说明；Claude Code 2.1.326 变更日志出现 Code Mode 与 agent teams 共用支持及后台会话修复。本轮只读到官方更新说明，未进一步验证开放前提与运行路径，不发布完整用法推荐。Codex 中断机制详解归入智能体栏目，避免重复条目。",
+      "sources": [
+        {
+          "title": "Claude 平台更新",
+          "url": "https://platform.claude.com/docs/en/release-notes/overview"
+        },
+        {
+          "title": "Claude Code 固定版本变更日志",
+          "url": "https://github.com/anthropics/claude-code/blob/bc1e8a88cb447f43697e848d991efed6cac2a64c/CHANGELOG.md"
+        }
+      ]
+    }
+  ]
+}
