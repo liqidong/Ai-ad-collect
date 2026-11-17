@@ -1,0 +1,90 @@
+{
+  "id": "codex-item-boundary-interrupt",
+  "title": "Codex 子代理中断：立即取消工具，让当前输出项完整落入历史",
+  "problem": "父代理需要在工作中途叫停子代理，但直接切断输出可能丢掉已生成的答复或形成不完整的工具调用历史；只等自然结束又会让工具继续工作。本次改动将“停止工具”和“保留当前模型输出项”拆成两个边界。它是 Agent Harness 的生命周期改动，不是新模型，也不证明编码准确率提高。与 11 月 15 日工具预算准入条目不同，本次处理的是显式父代理中断和随后恢复的顺序。",
+  "inputs": "运行在该固定提交的 Codex 多智能体 V2 子线程、正在流式输出的模型响应、父代理 interrupt_agent 请求和可能同时到达的后续输入。必须启用 interrupt_at_item_boundary，默认 false；源码还要求 V2 且存在 parent_thread_id。根线程、V1 以及未启用场景不能直接套用该行为。不涉及训练数据或新增权重。",
+  "outputs": "当前输出项被完整保留于历史，后续输出项被舍弃；被保留但未派发的工具调用获得 aborted before dispatch 结果，而非执行。被中断轮次发布终止事件后，后续输入才可启动下一轮。输出是可继续使用的会话历史及生命周期事件，不是事务回滚证明。",
+  "pipeline": [
+    {
+      "title": "1. 确定适用范围",
+      "explanation": "输入为轮次配置与线程关系。SamplingInterrupt::enabled 同时检查开关、V2 和父线程存在；默认关闭。满足条件时在开始采样请求前注册独立的工具取消令牌及完成信号，输出可被父代理定位的当前采样状态。"
+    },
+    {
+      "title": "2. 路由父代理中断",
+      "explanation": "V2 interrupt_agent 路由为 Op::InterruptAgent，而常规中断仍走 Op::Interrupt。输入为目标子线程请求；若已注册当前采样状态，则取消工具令牌与 MCP 审批等待，并按既有 CodeModeInterrupt 功能开关中断活动代码单元；没有注册状态时退回硬中断。输出是取消已请求状态，而非承诺远端副作用均未发生。"
+    },
+    {
+      "title": "3. 完成当前输出项，不继续采下一项",
+      "explanation": "流接收循环维护 between_items。中断发生在项中时，继续接收该项至 OutputItemDone；若已在两项之间则停止。取消过程同时推进正在运行工具的取消并收集结果，避免仅等待文本而放任工具继续。请求刚发出、尚未收到首个流事件也视为第一个项已开始。"
+    },
+    {
+      "title": "4. 写回完整调用与结果",
+      "explanation": "保留项若是文本，写入完整文本；若是工具调用，其调用记录可保留，但工具执行使用已取消的子令牌。官方测试检查该情况输出 aborted before dispatch。后续项不进入恢复后的历史；收集到的工具输出按保留项之后的顺序归档，保持调用与结果的配对。"
+    },
+    {
+      "title": "5. 在终止事件之后接收恢复输入",
+      "explanation": "若 StartOrSteer 到达已请求中断的活动轮次，它等待 finished 信号后再决定开启下一轮；有 expected_turn_id 的定向输入则返回 NoActiveTurn。轮次结束时保留中断历史，不发会让空闲贡献者重新启动子线程的空闲事件。输出为明确的旧轮次终止与新轮次开始顺序。"
+    }
+  ],
+  "mechanism": "关键在于两套取消含义分离：模型输出的保留边界是一个 output item，工具取消令牌则立即传播；它不等于等待整个响应结束，也不等于按单个 token 截断。finished 信号把历史记录与后续输入准入串起来。输出项可能是消息或函数调用，不能理解为自然语言的一句话。取消令牌只能约束支持该取消路径的本地执行，不能倒转已经完成的外部写入。",
+  "results": [
+    {
+      "claim": "源码开放，默认关闭，正式稳定版包含情况尚不能确认",
+      "evidence": "PR #61909 merged_at 为 2026-11-16T23:26:39Z；固定提交 committer 时间为 23:26:07Z。核查时最新稳定版 rust-v0.169.0 发布于 11 月 13 日，早于该改动，因此不能说升级到该稳定版就有此功能。",
+      "source": "https://github.com/openai/codex/pull/61909"
+    },
+    {
+      "claim": "新增两类模拟流测试覆盖消息与工具项",
+      "evidence": "interrupt_retains_one_sampled_item 用 message/tool 两种参数构造带闸门的 SSE 响应；断言保留 sampled 项、丢弃 later 项、发出 Interrupted、恢复输入 Resume. 恰出现一次，并在工具分支检查 aborted before dispatch。这里是已阅读的测试断言，不是本轮实测通过结果，也不是生产模型质量测评。",
+      "source": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/tests/suite/agent_mailbox.rs"
+    },
+    {
+      "claim": "没有可引用的性能或质量提升数字",
+      "evidence": "本改动没有论文数据集、PSNR、任务成功率或延迟对照表；不能把生命周期测试解释成编码成功率、成本或实时响应提升。",
+      "source": "https://github.com/openai/codex/commit/cff061fca9f811ea07416793214b45eddf66965e"
+    }
+  ],
+  "limitations": [
+    "本轮逐项读了固定提交的新增模块与关键 diff、配置和流式测试；未编译、未运行测试，未验证生产发布。",
+    "停工具不等于撤销副作用。已经发送的网络请求、已完成文件写入或不协作的远端任务需独立检查。",
+    "保留项结束之前仍需等待模型流到达项边界。源码不能据此证明固定最大取消延迟；慢流或异常流需额外故障注入。",
+    "默认关闭且仅限 V2 子线程。不能据此推断所有 Codex UI、第三方封装或已有部署已启用。",
+    "这里的 finished 是轮次生命周期同步，不是外部任务全部回滚、exactly-once 或全局分布式取消保证。"
+  ],
+  "engineering_notes": [
+    "最小试用：在隔离开发环境检出固定提交 cff061fca9f811ea07416793214b45eddf66965e，使用仓库现有测试构建方法，启用 MultiAgentV2 与对应配置开关，运行 agent_mailbox 中 interrupt_retains_one_sampled_item 的两种情形。先用模拟 SSE 和无副作用工具，不接真实付款、邮件或生产写入。",
+    "建议追加四类故障注入：中断在首事件前、项完成瞬间、工具已经发出后、恢复输入同时到达；检查终止事件次序、历史调用配对、恢复输入恰一次及外部副作用状态。",
+    "对于持续在线代理，这个模块可作为中断/恢复状态机参考，接入代价在流处理、工具执行、审批与历史存储多处，而不是只替换一个工具函数。以上为工程分析，不是作者基准结论。"
+  ],
+  "sources": [
+    {
+      "title": "官方 PR #61909：子代理输出项边界中断",
+      "url": "https://github.com/openai/codex/pull/61909"
+    },
+    {
+      "title": "固定提交：开关条件、中断注册与工具取消",
+      "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/sampling_interrupt.rs"
+    },
+    {
+      "title": "固定提交：流式输出保留与工具结果归档",
+      "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/turn.rs"
+    },
+    {
+      "title": "固定提交：后续输入准入",
+      "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/session/turn_input.rs"
+    },
+    {
+      "title": "固定提交：轮次结束与空闲事件处理",
+      "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/src/tasks/mod.rs"
+    },
+    {
+      "title": "固定提交：流式 SSE 回归测试",
+      "url": "https://github.com/openai/codex/blob/cff061fca9f811ea07416793214b45eddf66965e/codex-rs/core/tests/suite/agent_mailbox.rs"
+    },
+    {
+      "title": "官方稳定版本列表",
+      "url": "https://github.com/openai/codex/releases"
+    }
+  ],
+  "read_scope": "已阅读官方固定提交说明及涉及采样注册、流接收、中断路由、输入准入、轮次结束、配置与 SSE 测试的改动；并读取稳定发行元数据。未阅读或宣称审计整个仓库，未运行源码、测试或真实模型。"
+}
