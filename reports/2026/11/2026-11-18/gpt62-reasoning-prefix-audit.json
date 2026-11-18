@@ -1,0 +1,85 @@
+{
+  "id": "gpt62-reasoning-prefix-audit",
+  "title": "GPT-6.2 迁移：把历史编辑、推理丢弃与缓存未命中分开诊断",
+  "problem": "长运行 Agent 常回写旧工具输出、替换早期提示或在路由中降级模型。GPT-6.2 迁移的新风险不只是缓存失效：官方说明，部分历史变化会使已有 reasoning items 被移除。此条关注集成行为，不以发布跑分代替工程验证。",
+  "inputs": "Responses API 的有序历史、原始工具定义与配置、前一响应 ID；诊断实验只使用公开或合成任务，不需要上传生产日志。",
+  "outputs": "模型响应及 input_transformations、缓存诊断和 usage；可审计的历史回放记录。这里不读取或暴露模型内部原始思维链。",
+  "pipeline": [
+    {
+      "title": "1. 固定基线",
+      "explanation": "用同一模型和用户标识创建一个短的多轮工具任务；保留原有输入及返回项的顺序。先记录 response ID、usage、最终任务是否正确，再做受控变化。"
+    },
+    {
+      "title": "2. 追加而非回写",
+      "explanation": "需要改指令时追加 developer 消息；工具新增用 additional_tools，工具限制用 allowed_tools；原有工具定义与顺序保持不变。需要改变推理强度或输出格式时，追加 configuration_update，而不是修改原请求级设置。"
+    },
+    {
+      "title": "3. 检查真正移除项",
+      "explanation": "从响应 input_transformations 读取移除原因和 item ID，关联先前 output。重点区分 prefix_mismatch、end_user_mismatch、model_mismatch 与 organization_mismatch；这些原因不能统称为模型能力变差。"
+    },
+    {
+      "title": "4. 单独检查缓存",
+      "explanation": "设置 prompt_cache_options.comparison_response_id 指向基线；读取 prompt_cache_diagnostics 及 usage 的 cached_tokens。比较 ID 只请求诊断，不会替你加载旧对话。缓存命中也不证明 reasoning 已复用。"
+    },
+    {
+      "title": "5. 长历史压缩",
+      "explanation": "优先验证官方 context_management 自动压缩的回放路径：返回的 compaction 与配置更新按顺序带入下轮。独立 /responses/compact 对配置更新历史有额外准备要求，不应把两种接口当成完全等价。"
+    }
+  ],
+  "mechanism": "官方将 GPT-6.2 的前缀编辑检查与已有的模型/组织边界检查区分。推理项前插入或改写内容会触发 prefix_mismatch；仅追加新项，或只删除完整项而不改写其余项，本身不触发该原因，但删除仍可能损失任务信息。工具配置、历史压缩、缓存与推理保留是关联而不相同的机制。",
+  "results": [
+    {
+      "claim": "已发布的 API 迁移行为，不是本报告的性能实验",
+      "evidence": "官方 11 月 17 日发布 GPT-6.2 Astra/Sol；迁移页说明历史变化导致 reasoning 移除可能增加重复工作和影响质量，未给出此迁移机制的独立效果表。",
+      "source": "https://openai.com/index/introducing-gpt-6-2-astra-sol/"
+    },
+    {
+      "claim": "存在可观测的原因字段",
+      "evidence": "Reasoning 指南列出 prefix_mismatch 等移除原因；这些是接口行为说明，不是准确率提升数字。",
+      "source": "https://developers.openai.com/api/docs/guides/reasoning#reasoning-item-removal-across-requests"
+    },
+    {
+      "claim": "缓存诊断有边界",
+      "evidence": "诊断尽力报告首个分类原因，可能 unavailable 或比较记录过期；以 usage 衡量实际缓存量，不把估计值当账单。",
+      "source": "https://developers.openai.com/api/docs/guides/prompt-caching/diagnostics"
+    }
+  ],
+  "limitations": [
+    "未发起付费 API 实验，未测任务成功率、延迟或 token 节省。官方文档为滚动文档，核查时间是 2026-11-18；不声称所有辅助接口均在 11 月 17 日首次出现。",
+    "这不是检查所谓“降智”的万能检测器。接口回放问题、模型版本变化和任务本身波动必须分开排查。",
+    "改变组织或用户隔离标识不能为了保留推理而绕过隔离。模型间复用也不能假设无条件成立。"
+  ],
+  "engineering_notes": [
+    "工程判断：模型升级前应先审计 harness 是否回写历史。把一次会话的输入变换纳入可重复测试，比只比较最终回答更容易定位回归。",
+    "建议最小实验为三个隔离副本：完全追加、回写一段旧工具输出、按官方方式追加配置更新。固定任务/工具结果/模型，分别统计任务通过率、移除项、输入输出 token 与延迟；不把一次成功当稳定结论。",
+    "建议额外验证取消恢复与自动压缩后的工具可用性、配置生效值、输出项顺序；将真正业务断言与缓存命中率分开验收。",
+    "接入前检查 SDK 是否支持相应字段；文本 Chat Completions 兼容不等于工具调用可直接沿用。GPT-6.2 工具工作流按官方迁移指引使用 Responses。"
+  ],
+  "sources": [
+    {
+      "title": "11月17日官方发布",
+      "url": "https://openai.com/index/introducing-gpt-6-2-astra-sol/"
+    },
+    {
+      "title": "GPT-6.2迁移指南",
+      "url": "https://developers.openai.com/api/docs/guides/latest-model"
+    },
+    {
+      "title": "历史前缀与追加更新",
+      "url": "https://developers.openai.com/api/docs/guides/keep-prefix-unchanged"
+    },
+    {
+      "title": "推理项移除与配置更新",
+      "url": "https://developers.openai.com/api/docs/guides/reasoning"
+    },
+    {
+      "title": "缓存诊断",
+      "url": "https://developers.openai.com/api/docs/guides/prompt-caching/diagnostics"
+    },
+    {
+      "title": "压缩与状态回放",
+      "url": "https://developers.openai.com/api/docs/guides/compaction"
+    }
+  ],
+  "read_scope": "已读发布说明、迁移指南、前缀保留指南、缓存诊断全文，以及 Reasoning 的配置更新/移除原因、Compaction 的自动压缩和工具配置恢复相关章节。未逐项执行 API 示例；未把文档示例视为独立复现。"
+}
