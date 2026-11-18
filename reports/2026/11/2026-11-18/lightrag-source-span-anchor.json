@@ -1,0 +1,72 @@
+{
+  "id": "lightrag-source-span-anchor",
+  "title": "LightRAG 修复位置溯源：相同文字不代表同一段原文",
+  "problem": "固定 token 分窗会切开多字节字符。解码丢字节、生成替代符，遇到重复文本时，附近搜索能找到内容相同但位置错误的段落。引用高亮因此可能看似正确却指错来源。",
+  "inputs": "原始文本、tokenizer、分窗大小/重叠与可选分隔符；需请求 source span 才走位置映射分支。",
+  "outputs": "原有 chunk 文本与顺序；可信时附原文字符区间，歧义时不提供区间。它不生成新的答案质量保证。",
+  "pipeline": [
+    {
+      "title": "1. 建立可验证锚点",
+      "explanation": "输入一个文本分段及 token 序列，以已知 token/字符位置为起点。开头空白被 tokenizer 丢弃的情况，以完整解码与原文后缀核对后调整起点。"
+    },
+    {
+      "title": "2. 联合解码定位",
+      "explanation": "从已验证锚点解码到窗口末尾；确认联合文本匹配原文且窗口是它的后缀，再推算区间。用位置证据替代“附近能搜到同样文字”。"
+    },
+    {
+      "title": "3. 保守处理歧义",
+      "explanation": "源文本含真实 U+FFFD 时，窗口边缘替代符要做 token 往返检查；不确定就不输出位置。无真实替代符时才尝试多字节边界内部文本恢复。锚点失真后停止该段溯源，而不改变 chunk 内容。"
+    },
+    {
+      "title": "4. 下游验证",
+      "explanation": "测试覆盖块加载、再次硬分块、sidecar 回填和入库存储。工程验收应确认引用仍落在正确原文位置，同时明确记录没有位置的 chunk，不能以空结果冒充修复成功。"
+    }
+  ],
+  "mechanism": "改动的核心是“内容相等”不足以证明“位置相等”。联合解码保留窗口与已知锚点的关系，避免重复文字造成假阳性；宁可降低可标注覆盖率，也不编造精确位置。代码中的 source span 是字符偏移，测试的字节真值用于独立核对，不能混用两种单位。",
+  "results": [
+    {
+      "claim": "默认分支修复已合并，尚不能等同已发稳定包",
+      "evidence": "PR #4463 于 2026-11-17 16:52:56 UTC 合并，固定提交 264b00e；本轮读到最新 release v1.5.8rc1 发布于 11月15日，早于此修复。",
+      "source": "https://github.com/HKUDS/LightRAG/pull/4463"
+    },
+    {
+      "claim": "作者报告针对性回归通过",
+      "evidence": "PR 记录歧义窗口测试在基线失败、补丁后通过。本文未运行这些测试，不扩展为整个项目 CI 已通过。",
+      "source": "https://github.com/HKUDS/LightRAG/pull/4463"
+    },
+    {
+      "claim": "测试设计覆盖位置而非只比字符串",
+      "evidence": "新增多类解码器、重复字符与随机文本的精确偏移断言，以及丢失空白、后续硬分块和存储边界。4096词合成例包含解码工作量不超过词数7倍的断言；这不是生产吞吐基准。",
+      "source": "https://github.com/HKUDS/LightRAG/blob/264b00ebfac646b8366966f4705e36423088dc51/tests/chunker/test_token_window_source_span.py"
+    }
+  ],
+  "limitations": [
+    "未复现测试或跑真实文档集；合成测试不证明任意 tokenizer 均有完整溯源覆盖。",
+    "无法证明位置时省略 source span 是设计行为；使用方需决定如何显示“无精确定位”的引用。",
+    "修复不自动重建已入库数据，也没有提供 RAG 回答准确率提升、召回率或生产延迟数据。"
+  ],
+  "engineering_notes": [
+    "工程判断：对需要点击引用回到原文的中文或多语言知识库，这类定位可靠性值得单独验收。普通问答是否改善仍需另测，不应把引用定位修复包装成检索算法提升。",
+    "建议建立公开合成语料：重复段落、emoji、真实替代符、前导空白及有损 tokenizer。分别统计有效 span 精度、span 覆盖率、chunk 文本是否变化；先明确字符与字节单位。",
+    "建议做一次完整入库回读验收，检查引用页/块与精确区间是否仍对应同一来源。若升级版本仍未包含该提交，先在隔离分支验证，不直接混用主分支生产依赖。"
+  ],
+  "sources": [
+    {
+      "title": "原始PR与作者验证记录",
+      "url": "https://github.com/HKUDS/LightRAG/pull/4463"
+    },
+    {
+      "title": "固定版本分块实现",
+      "url": "https://github.com/HKUDS/LightRAG/blob/264b00ebfac646b8366966f4705e36423088dc51/lightrag/chunker/token_size.py"
+    },
+    {
+      "title": "固定版本回归测试",
+      "url": "https://github.com/HKUDS/LightRAG/blob/264b00ebfac646b8366966f4705e36423088dc51/tests/chunker/test_token_window_source_span.py"
+    },
+    {
+      "title": "公开版本",
+      "url": "https://github.com/HKUDS/LightRAG/releases"
+    }
+  ],
+  "read_scope": "已读 PR、两份文件完整变更和 token_size.py 完整实现，核对新增回归与下游位置回填测试；未运行代码。"
+}
