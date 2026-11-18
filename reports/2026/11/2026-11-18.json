@@ -1,0 +1,118 @@
+{
+  "date": "2026-11-18",
+  "title": "推理历史保留与引用位置可靠性",
+  "edition_label": "公开来源增量研究",
+  "summary": "两项技术深读：GPT-6.2 集成的历史变更诊断，以及 LightRAG 多字节分窗的原文位置修复。数字人方向发现 TopSDF 论文候选，但复现资料与实验报告仍有待澄清，不作为新开源推荐。",
+  "notice": "仅依据公开原始资料。区分官方接口说明、作者测试与工程建议；本轮未运行模型、测试套件或训练。",
+  "verified_at": "2026-11-18T00:05:40.561Z",
+  "items": [
+    {
+      "id": "gpt62-reasoning-prefix-audit",
+      "category": "大模型前沿用法",
+      "title": "GPT-6.2 迁移：把历史编辑、推理丢弃与缓存未命中分开诊断",
+      "finding": "GPT-6.2 迁移将部分历史修改变为 reasoning items 移除问题；应分别查看 input_transformations 与缓存诊断。",
+      "relevance": "长时任务、模型路由和压缩恢复的可靠性排查，不能只换模型名或只看缓存命中。",
+      "action": "以三个隔离的合成多轮用例对照追加、回写和配置更新，记录移除原因与任务断言。",
+      "caveat": "官方行为说明，未独立实测；不是通用“降智检测器”。辅助机制并非都在本次首发。",
+      "recency_label": "11月17日模型发布及迁移行为 / 文档已开放",
+      "source_date": "官方发布 2026-11-17；滚动文档于 2026-11-18 核查。",
+      "sources": [
+        {
+          "title": "11月17日官方发布",
+          "url": "https://openai.com/index/introducing-gpt-6-2-astra-sol/"
+        },
+        {
+          "title": "GPT-6.2迁移指南",
+          "url": "https://developers.openai.com/api/docs/guides/latest-model"
+        },
+        {
+          "title": "历史前缀与追加更新",
+          "url": "https://developers.openai.com/api/docs/guides/keep-prefix-unchanged"
+        },
+        {
+          "title": "推理项移除与配置更新",
+          "url": "https://developers.openai.com/api/docs/guides/reasoning"
+        },
+        {
+          "title": "缓存诊断",
+          "url": "https://developers.openai.com/api/docs/guides/prompt-caching/diagnostics"
+        },
+        {
+          "title": "压缩与状态回放",
+          "url": "https://developers.openai.com/api/docs/guides/compaction"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-18/gpt62-reasoning-prefix-audit.md"
+    },
+    {
+      "id": "lightrag-source-span-anchor",
+      "category": "知识库 / RAG",
+      "title": "LightRAG 修复位置溯源：相同文字不代表同一段原文",
+      "finding": "固定窗口以已验证锚点联合解码，避免重复文本与多字节边界导致错误原文定位；歧义时不输出位置。",
+      "relevance": "引用高亮与原文追溯的可靠性，尤其是多语言、重复段落和特殊字符。",
+      "action": "先核实部署版本包含提交，再分开验收 span 精度、覆盖率和下游入库回读。",
+      "caveat": "主分支已合并，不等同已发布稳定包；不代表问答质量提升。",
+      "recency_label": "11月17日主分支修复 / 未实测",
+      "source_date": "PR #4463 合并 2026-11-17T16:52:56Z；2026-11-18核查。",
+      "sources": [
+        {
+          "title": "原始PR与作者验证记录",
+          "url": "https://github.com/HKUDS/LightRAG/pull/4463"
+        },
+        {
+          "title": "固定版本分块实现",
+          "url": "https://github.com/HKUDS/LightRAG/blob/264b00ebfac646b8366966f4705e36423088dc51/lightrag/chunker/token_size.py"
+        },
+        {
+          "title": "固定版本回归测试",
+          "url": "https://github.com/HKUDS/LightRAG/blob/264b00ebfac646b8366966f4705e36423088dc51/tests/chunker/test_token_window_source_span.py"
+        },
+        {
+          "title": "公开版本",
+          "url": "https://github.com/HKUDS/LightRAG/releases"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-18/lightrag-source-span-anchor.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "CAP4D、Kirschstein FlexAvatar、DEGAS、SplatCtrlA 的默认分支未查到11月17日起新增提交。arXiv最新11月17日列表筛查发现TopSDF（v1为11月6日），已读方法、实验及局限并核对PDF；其表4与正文PSNR数字不一致，未找到官方代码入口。本期仅列候选，不冒充开源发布或数字人效果验证。",
+      "sources": [
+        {
+          "title": "TopSDF",
+          "url": "https://arxiv.org/abs/2611.18708"
+        },
+        {
+          "title": "TopSDF原文",
+          "url": "https://arxiv.org/html/2611.18708v1"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "finding": "Docling11月17日提交包含未声明编码HTML的UTF-8解析修复，已查相关实现和测试；MinerU未查到当日新增默认分支提交，Crawl4AI仅筛到安全联系文档维护。未提升为新的完整研究条目。",
+      "sources": [
+        {
+          "title": "Docling固定修复",
+          "url": "https://github.com/docling-project/docling/commit/ce69639a64683598b915e003ee5e65b5c03454bd"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "finding": "筛查Codex近期Guardian/远程控制等提交与Claude Code 2.1.327变更；没有把仅筛查、尚未完整核验的能力写成稳定可用推荐。上一期Codex边界中断不重复收录。",
+      "sources": [
+        {
+          "title": "Codex提交",
+          "url": "https://github.com/openai/codex/commits/main/"
+        },
+        {
+          "title": "Claude Code固定更新日志",
+          "url": "https://github.com/anthropics/claude-code/blob/9fa26078be418ec4b217334812e2a04cc63336ae/CHANGELOG.md"
+        }
+      ]
+    }
+  ]
+}
