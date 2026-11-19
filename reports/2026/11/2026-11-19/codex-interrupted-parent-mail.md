@@ -1,0 +1,71 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-19
+verified_at: "2026-11-19T00:01:52.312Z"
+---
+
+# Codex 中断恢复：先持久化已接收的子代理回复，再发终止事件
+
+## 问题
+父代理正在等待模型响应时，子代理最终回复可能已被注入队列并得到接收确认，却尚未进入模型上下文。此时中断父回合，清理逻辑可能丢掉消息。增量是这一竞态的持久化修复，不是11月17日报道的输出项边界中断策略。
+
+## 输入
+正在运行的父回合、尚未消费的 ResponseItem::AgentMessage、Interrupted 中断原因及会话历史存储。
+
+## 输出
+已接收的代理消息写入会话历史；发出 TurnAborted 后，下一次模型请求能继续看到该消息。并不承诺工作任务或外部副作用自动重做一次且仅一次。
+
+## 流程
+### 1. 等待执行退出
+中断路径取消运行任务并处理退出，随后整理该回合尚未消费的输入。这里不是中断子代理本身，而是保护父代理已接收的消息。
+
+### 2. 分离代理消息
+从待处理输入中取出 AgentMessage，其他输入放回原有清理路径，保留本来处理终端结果的逻辑，不把所有待处理内容一概写成代理邮件。
+
+### 3. 写历史并刷新
+将代理消息按注释化会话项记录；即使关闭中断提示标记，也调用历史刷新，避免标记开关让持久化屏障被跳过。
+
+### 4. 再通知结束
+完成上述路径后才发送 TurnAborted。恢复时从已有历史继续，而非要求发送方再次发送同一最终回复。测试检查终止事件到达时历史已有消息，以及下一模型请求只包含一次。
+
+## 机制
+接收确认、模型消费和持久化是三个不同阶段。修复把消息保存放在队列拆除与终止通知之前。源码的刷新失败处理仍是记录 warning，因此不能将正常路径顺序保证扩展为磁盘故障、进程崩溃或任意分布式故障下的严格 exactly-once 保证。
+
+## 来源事实与报告效果
+### 主分支修复已合并
+PR #62348 于2026-11-18T19:40:16Z合并，固定提交9d8ca1d。本轮最新稳定release rust-v0.170.0发布时间为同日03:40:48Z，早于修复，不把它声称为稳定版已提供。
+
+[原始证据](https://github.com/openai/codex/pull/62348)
+
+### 存在特定竞态回归测试
+测试关闭InstantInterrupt和中断标记，用延迟60秒的Mock响应使邮件保持排队；收到TurnAborted后检查持久历史，再继续下一回合，断言请求邮件序列为先空、后恰好一条。60秒是模拟延迟，不是实测中断耗时。
+
+[原始证据](https://github.com/openai/codex/blob/9d8ca1df71dd95e0bb77b22207236f29a83bdc5f/codex-rs/core/tests/suite/host_turn_admission.rs)
+
+### 快照保留消息先于继续指令
+固定提交快照中的第二次模型请求先出现agent_message，再出现Continue work用户消息。该快照与测试不能证明编码质量、生产任务吞吐或所有恢复路径。
+
+[原始证据](https://github.com/openai/codex/blob/9d8ca1df71dd95e0bb77b22207236f29a83bdc5f/codex-rs/core/tests/suite/snapshots/all__suite__scenarios__host_turn_admission__injected_child_final_survives_parent_interrupt.snap)
+
+## 局限与未知
+- 本轮阅读实现、完整补丁和回归测试，未运行Rust测试或真实模型。PR写的是新增测试，不据此断言所有CI已通过。
+- 新增保存分支针对Interrupted；预算耗尽、已取消的快速返回、进程被强杀和存储故障，不能由此测试推导同等保障。
+- 该回归针对特定场景的消息保留，不等于外部写操作幂等，也不保证模型真正采用了回复内容。
+
+## 工程建议（未实测）
+- 工程判断：长运行多代理系统应分别记录消息接收、持久化与消费水位。UI显示“已发送”不足以证明父代理恢复后会收到。
+- 建议最小验收：固定合成任务，在子回复到达与父采样未完成之间触发中断，等待终止事件后立即读历史，再恢复并检查消息ID计数和最终任务断言。
+- 建议额外注入重复消息、并发两条回复、持久化失败及强制进程退出，分别检查丢失、重复与恢复顺序；这些属于建议实验，不是本修复已验证覆盖。
+- 采用前先核对安装版本包含该提交。自建harness可借鉴持久化屏障的设计，但不建议为了此修复直接替换生产运行时为未经验证的主分支。
+
+## 阅读范围
+已阅读PR说明、三文件完整补丁、中断处理完整相关函数及新增测试/快照，核验合并时间与最新稳定release时间。未执行测试，未评价未读的Guardian等其他提交。
+
+## 原始来源
+- [官方PR状态与说明](https://github.com/openai/codex/pull/62348)
+- [固定版本中断路径](https://github.com/openai/codex/blob/9d8ca1df71dd95e0bb77b22207236f29a83bdc5f/codex-rs/core/src/tasks/mod.rs)
+- [固定版本回归测试](https://github.com/openai/codex/blob/9d8ca1df71dd95e0bb77b22207236f29a83bdc5f/codex-rs/core/tests/suite/host_turn_admission.rs)
+- [请求历史快照](https://github.com/openai/codex/blob/9d8ca1df71dd95e0bb77b22207236f29a83bdc5f/codex-rs/core/tests/suite/snapshots/all__suite__scenarios__host_turn_admission__injected_child_final_survives_parent_interrupt.snap)
+- [公开稳定版本](https://github.com/openai/codex/releases/tag/rust-v0.170.0)
