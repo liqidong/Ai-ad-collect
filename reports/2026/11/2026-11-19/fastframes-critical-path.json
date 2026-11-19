@@ -1,0 +1,90 @@
+{
+  "id": "fastframes-critical-path",
+  "title": "FastFrames：把视频生成加速重点移到解码与缓存更新",
+  "problem": "交互视频不仅要求吞吐高，还要求新控制输入尽快影响可见画面。一次生成多帧的平均FPS不能替代响应延迟。",
+  "inputs": "文本提示、随机种子与历史缓存；相机控制演示另需LingBot模型及条件。训练需匹配骨干与教师缓存目标；官方安装指南要求Linux x86-64、NVIDIA与CUDA 12.8，训练还需提示列表及至少81帧的真实视频，不能把仅下载S附件当成完整训练数据。",
+  "outputs": "默认T2V命令输出832×480、81帧、16fps视频；不是Mesh或可驱动3D资产。",
+  "pipeline": [
+    {
+      "title": "保持两步生成骨干",
+      "explanation": "S使用冻结的Causal Forcing++；L先将Wan2.1-14B转为因果少步模型。"
+    },
+    {
+      "title": "轻量像素输出",
+      "explanation": "保持骨干冻结，从DiT特征经低分辨率ConvNeXt头读出RGB；用教师VAE输出监督重建，再作像素域优化，避免逐级高分辨率解码开销。"
+    },
+    {
+      "title": "修复历史缓存",
+      "explanation": "以当前生成内容和有噪历史键值预测修正，用原骨干更新得到的缓存作教师；替代额外完整DiT前向，而非简单取消缓存更新。"
+    },
+    {
+      "title": "优化执行路径",
+      "explanation": "复用缓冲、融合投影、CUDA graph，并提供多卡执行。"
+    }
+  ],
+  "mechanism": "工程启示是先剖析端到端关键路径，再决定蒸馏哪里；去噪步数少，不代表其他开销已经可以忽略。",
+  "results": [
+    {
+      "claim": "作者报告S在单B200达到36ms",
+      "evidence": "480p、预热且缓存已满的稳态生成单元；表1 VBench总分（越高越好）84.23，对照CF++为272ms、84.11；语义分79.92低于对照80.20。不是所有质量指标均提高。",
+      "source": "https://arxiv.org/html/2611.23226v1"
+    },
+    {
+      "claim": "L的45ms需要8张B200",
+      "evidence": "官方演示列出L单卡158ms、8卡45ms，不能写成单卡实时。",
+      "source": "https://apple-aiml-research.github.io/ml-fastframes/"
+    },
+    {
+      "claim": "官方代码与权重可读取",
+      "evidence": "核查GitHub固定提交及HF文件清单；S提供解码器/缓存修复器，生成骨干另取CF++；L提供DiT及两类附属权重。未下载大权重或运行。",
+      "source": "https://github.com/apple-aiml-research/ml-fastframes/blob/a65c59240e01cf1de86197fa771ca09b38cf592a/docs/installation.md"
+    }
+  ],
+  "limitations": [
+    "论文中的低延迟是稳态生成单元延迟，不是首次启动时间，也不能直接换算成用户端网络交互时延。",
+    "分辨率、硬件和动作条件都会改变延迟；未提供4090或Mac实测，不能外推本地实时。",
+    "像素头与具体模型匹配，并非通用VAE即插即用替换。",
+    "权重采用Apple研究模型许可，限定非商业科学研究，明确不包含产品开发；代码的Apple Sample Code License不能替代权重许可。LingBot另有CC BY-NC-SA 4.0约束。"
+  ],
+  "engineering_notes": [
+    "工程判断：适合作为交互视频研究基线，而非直接替换现有人物表示。它没有证明身份保持、口型同步、头部几何或自由视角一致性。",
+    "建议先做只读工程评估：辨清训练与推理依赖、可复现输入、缓存容量、预热和时间测量边界；待硬件与许可适配再决定试跑。",
+    "若研究3D渲染作为视频条件，必须另验证模型是否接受所需条件，不能把相机控制demo等同于已有SMPL-X/3DGS输入接口。",
+    "建议将实时目标拆成首次出图、稳态控制响应、持续运行漂移三个验收指标；与原链路比较时固定分辨率、缓存长度和画质约束。"
+  ],
+  "sources": [
+    {
+      "title": "论文全文及附录",
+      "url": "https://arxiv.org/html/2611.23226v1"
+    },
+    {
+      "title": "官方项目演示",
+      "url": "https://apple-aiml-research.github.io/ml-fastframes/"
+    },
+    {
+      "title": "代码与安装指南",
+      "url": "https://github.com/apple-aiml-research/ml-fastframes/blob/a65c59240e01cf1de86197fa771ca09b38cf592a/docs/installation.md"
+    },
+    {
+      "title": "FastFrames-L权重及模型卡",
+      "url": "https://huggingface.co/apple/FastFrames-L"
+    },
+    {
+      "title": "权重许可证",
+      "url": "https://huggingface.co/apple/FastFrames-L/blob/main/LICENSE"
+    },
+    {
+      "title": "代码许可证",
+      "url": "https://github.com/apple-aiml-research/ml-fastframes/blob/a65c59240e01cf1de86197fa771ca09b38cf592a/LICENSE"
+    },
+    {
+      "title": "FastFrames-S权重与模型卡",
+      "url": "https://huggingface.co/apple/FastFrames-S"
+    },
+    {
+      "title": "原稿提交历史",
+      "url": "https://arxiv.org/abs/2611.23226"
+    }
+  ],
+  "read_scope": "已读HTML主文方法/表1/实验与附录A-E，官方项目页、模型卡、安装指南、代码与权重LICENSE；读取GitHub/HF元数据和权重文件清单。未逐行审计实现、未运行测试或模型、未下载大权重。"
+}
