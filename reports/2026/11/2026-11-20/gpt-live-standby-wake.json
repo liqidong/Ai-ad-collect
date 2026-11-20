@@ -1,0 +1,73 @@
+{
+  "id": "gpt-live-standby-wake",
+  "title": "GPT-Live 新增语音待机：暂停推理，不关闭连接",
+  "problem": "持续语音应用在用户思考时仍保持活跃推理，会产生闲置成本；直接关闭则失去监听能力和原连接。11月19日更新提供WebRTC待机与语音唤醒，并推出GPT-Live-1.1。重点是生命周期控制，不以未量化的音质改进作结论。",
+  "inputs": "WebRTC音频轨、启动时的model及wake_policy/idle_timeout_s、必要的文字历史与后台委派规则。适用于GPT-Live-1与1.1；模型入口是Live API，不是把同一模型名直接塞进Realtime或Responses。",
+  "outputs": "同一session ID上暂停/恢复推理的事件，恢复后音频及转写；后台任务和工具结果需要应用另行管理。",
+  "pipeline": [
+    {
+      "title": "1. 启动即等待语音",
+      "explanation": "创建WebRTC会话时设wake_policy.type为speech；麦克风轨保持开启，待检测到语音后开始推理。不是麦克风静音，也不是用户未授权的后台录音方案。"
+    },
+    {
+      "title": "2. 配置闲置返回",
+      "explanation": "idle_timeout_s接受5–60的整数，按无输入或输出转写的时长回到待机；不填写则首次唤醒后一直活跃至结束。vad_threshold为0–1、默认0.5，用于唤醒检测灵敏度。"
+    },
+    {
+      "title": "3. 按事件呈现状态",
+      "explanation": "监听session.paused和session.resumed，分别显示待机与推理就绪。不要仅凭网络连接仍在或界面静音判断计费状态。短句在待机后首次回答可能更慢。"
+    },
+    {
+      "title": "4. 分离语音与后台工作",
+      "explanation": "GPT-Live-1.1可用自然语言说明何时委派。后台实际开始与完成需通过任务事件/结果核实，模型说“正在查”不是执行成功证据。长间隔若选择彻底关闭，应用还需负责重新建立会话和恢复任务状态。"
+    }
+  ],
+  "mechanism": "待机保留连接和会话，由服务端语音检测恢复推理；长时间断连是另一种模式，闭合会话不再监听。新版本提示支持自然语言委派条件，不能由此推断语音模型本身直接拥有全部后台工具权限。",
+  "results": [
+    {
+      "claim": "接口已列入官方发布记录",
+      "evidence": "2026年11月19日更新宣布GPT-Live-1.1及两代Live的WebRTC待机。本文核查官方接口文档，未拨打真实语音会话或运行付费API。",
+      "source": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "claim": "待机有独立费率，并非免费保持在线",
+      "evidence": "1.1模型页列Active每分钟US$0.05、Standby每分钟US$0.02；后台模型和工具另计费。若仅比较相同时长语音状态，待机单价低60%，这只是算术，不是端到端账单节省实测。",
+      "source": "https://developers.openai.com/api/docs/models/gpt-live-1.1"
+    },
+    {
+      "claim": "音质改善是官方描述，无本轮独立指标",
+      "evidence": "官方描述多语言转写、口音与发声一致性改善；所读模型页无可用于本场景外推的对照数据表，不给出中文WER或延迟改善数字。",
+      "source": "https://developers.openai.com/api/docs/models/gpt-live-1.1"
+    }
+  ],
+  "limitations": [
+    "待机只对所述WebRTC路径确认，不能泛化到WebSocket/SIP。仍需要麦克风轨活跃，应用必须明确呈现监听状态并遵守用户授权。",
+    "语音恢复不是零延迟。VAD误唤醒、短句首字丢失和背景噪声表现需要自己的测试。",
+    "Live与Live-1.1并发会话配额分开；实际账号是否可用需查组织限制。模型和声音需在启动时选定，不能把替换模型理解为原连接内无缝切换。"
+  ],
+  "engineering_notes": [
+    "建议最小试验：以公开或合成语音分别覆盖讲话、长停顿、短句唤醒、背景噪声与助手说话中的插话，记录暂停/恢复事件和首个可听响应时间。先做授权清晰的单会话，不自动替换生产配置。",
+    "费用评估应记录活跃与待机驻留时长、后台token及重连开销；分别比较一直在线、待机、关闭后重建，不能只报告模型单价差。",
+    "对语音驱动数字人，这是会话层选项，不产生SMPL-X、FLAME或口型动作参数；音频到动作的对齐、渲染延迟和身份保持仍需独立方案。",
+    "建议增加后台任务恰在待机/重连期间完成的用例：检查结果路由和重复执行，不让旧会话结果覆盖新任务。该项为工程推断，未验证服务端所有委派行为。"
+  ],
+  "sources": [
+    {
+      "title": "11月19日API更新",
+      "url": "https://developers.openai.com/api/docs/changelog"
+    },
+    {
+      "title": "GPT-Live-1.1模型与计费",
+      "url": "https://developers.openai.com/api/docs/models/gpt-live-1.1"
+    },
+    {
+      "title": "待机与会话生命周期",
+      "url": "https://developers.openai.com/api/docs/guides/live-conversations#managing-idle-sessions"
+    },
+    {
+      "title": "委派提示与验证",
+      "url": "https://developers.openai.com/api/docs/guides/live-prompting#recommended-prompt-structure"
+    }
+  ],
+  "read_scope": "已读官方11月19日更新、1.1模型页、会话配置/上下文/转写及待机关闭恢复章节、提示指南的结构与委派章节；未完整审读所有声音示例或所有传输API参考，未发起实际会话。"
+}
