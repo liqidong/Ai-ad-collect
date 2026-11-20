@@ -1,0 +1,70 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-20
+verified_at: "2026-11-19T23:58:34.113Z"
+---
+
+# Docling 接通原生 MLX：Nemotron 3.5 Parse 可在 Apple Silicon 本地解析文档
+
+## 问题
+同一个文档解析预设此前可走 Transformers 或 API，但 Apple Silicon 没有原生 MLX 选项。新增的是 Docling 的本地接入与自动选择，不是新论文或新模型首发。
+
+## 输入
+待解析PDF或页面图像、包含该改动的 Docling、Apple Silicon，以及 mlx-vlm ≥0.7.11。配置固定引用社区转换的 bf16 权重；另有量化权重但不是此默认预设。
+
+## 输出
+复用既有输出映射，产生语义块、边界框以及适用的 Markdown 正文、LaTeX 表格和图表数据。合并不保证每页输出与 Transformers 逐字逐框一致。
+
+## 流程
+### 识别运行环境
+自动引擎选择在 Apple Silicon 且运行库到达最低版本时选择 MLX；运行库旧版或 CUDA 走 Transformers。显式选择 MLX 但运行库太旧时先报版本错误，不先下载模型。
+
+### 固定权重与解码参数
+使用固定提交的社区 bf16 转换权重，运行安装好的原生 MLX 实现，不要求启用 Hugging Face 模型远程代码。预设向推理输入传递全历史重复惩罚 1.1；显式引擎参数优先。
+
+### 还原文档结构
+本地模型以贪心方式生成结构化内容，不使用可选 MTP；复用 Docling 的 Nemotron 输出映射。接入没有重训模型或更改输出标签体系。
+
+## 机制
+版本门槛把“安装了 MLX”与“安装版本包含原生模型实现”分开。项目通用依赖最低版本仍是 0.7.0；仅该模型在 MLX 路径要求 0.7.11，锁文件也升级为 0.7.11。替换的是运行引擎和权重格式，不是文档结果的判定标准。
+
+## 来源事实与报告效果
+### 合并晚于当日发行标签
+11月19日15:29:45 UTC 合入 main（825c774）；v2.151.1 发布于15:27:09 UTC，已核对标签源码不含 MLX 固定权重 revision。上游 mlx-vlm 0.7.11 已于10月28日发布。
+
+[原始证据](https://github.com/docling-project/docling/pull/4934)
+
+### 作者做过单页端到端验证
+Apple Silicon、mlx-vlm 0.7.11、固定 bf16 权重；报告单页5.0秒、1064 tokens，未用远程模型代码。作者报告126项针对性测试通过，更宽子集366通过、6跳过；不是本轮独立复现。
+
+[原始证据](https://github.com/docling-project/docling/pull/4934)
+
+### bf16后端对照不完全一致
+PR最终版按原始表格汇报：3页文本相似度分别为100%、90.770%、99.897%；首样本完整输出相同，但账单与科学表格坐标不完全一致，账单类别也不完全一致。文档链接的旧 fork-build 报告有不同数值，不能混用。
+
+[原始证据](https://github.com/docling-project/docling/pull/4934)
+
+## 局限与未知
+- 作者三页对照不能证明整体精度、速度或统一内存要求，也不是对 Mac M1 Max 的本轮实测。
+- 旧版或 CUDA 回到 Transformers，但该路径仍需显式审核/信任固定版本的模型代码。MLX 路径不要求此开关，不等于第三方依赖或权重无需审核。
+- 当前为已合并源码；不把 v2.151.1 写成含该功能。不将社区转换权重宣传为 NVIDIA 官方 MLX 发行。
+- 社区bf16模型卡保留源模型OpenMDW-1.1，tokenizer采用MIT并注明NVIDIA修改与归属；运行前仍应核对各依赖和权重条款。
+
+## 工程建议（未实测）
+- 最小试验：确认 Docling 源码/发行含 825c774 和运行库版本达标，在 Apple Silicon 用一份公开单页 PDF 按官方 VLM 预设跑一次，日志确认 MLX；不要为了回退自动放开远程模型代码。
+- 如用作知识库入库前端，建议固定同页、渲染分辨率和权重，比较正文字符、表格数值、框的位置与引用页正确率，分别记录冷启动/稳态耗时和峰值内存。表格关键字段不应只凭文本相似度验收。
+
+## 阅读范围
+已核对 GitHub 实时合并、七文件完整补丁（预设、MLX 参数、文档、测试与锁文件）、上游发行时间及 Docling 最新标签的固定预设源码。未独立运行测试或下载模型。
+
+## 原始来源
+- [Docling PR、作者验证与合并](https://github.com/docling-project/docling/pull/4934)
+- [固定提交：引擎预设](https://github.com/docling-project/docling/blob/825c77458b4d05ed7071d0789dc8e40ba9d18211/docling/datamodel/stage_model_specs.py)
+- [固定提交：MLX生成参数](https://github.com/docling-project/docling/blob/825c77458b4d05ed7071d0789dc8e40ba9d18211/docling/models/inference_engines/vlm/mlx_engine.py)
+- [固定提交：预设与版本门槛测试](https://github.com/docling-project/docling/blob/825c77458b4d05ed7071d0789dc8e40ba9d18211/tests/test_nemotron_parse_v3_5.py)
+- [上游MLX运行库发行](https://github.com/Blaizzy/mlx-vlm/releases/tag/v0.7.11)
+- [固定bf16权重](https://huggingface.co/geoHeil/Nemotron-3.5-Parse-MLX-bf16/tree/d6a6b5386601e04706e36268e0c003fca9671ade)
+- [Docling v2.151.1发布](https://github.com/docling-project/docling/releases/tag/v2.151.1)
+- [固定社区模型卡与许可说明](https://huggingface.co/geoHeil/Nemotron-3.5-Parse-MLX-bf16/blob/d6a6b5386601e04706e36268e0c003fca9671ade/README.md)
