@@ -1,0 +1,60 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-21
+verified_at: "2026-11-21T00:02:37Z"
+---
+
+# Codex 0.171.0：非交互 CLI 可连接既有 app server
+
+## 问题
+
+此前的远程 TUI 不等同于给脚本一个非交互入口。新版本让拥有既有 app server 的调用方用 CLI 发一轮任务、拿回结构事件或文本，不要求在调用端再构建一套本地代理配置。
+
+## 输入
+
+Codex 0.171.0、受控的既有 app server 地址、纯文本任务；继续既有会话时给出明确的线程 UUID。WebSocket bearer 认证可指定只读出令牌的环境变量名称。
+
+## 输出
+
+新线程标识或已有线程的本轮输出；支持 JSONL 事件及文本输出。不能把普通 JSONL 事件误作自定义结果 schema。
+
+## 流程
+
+- **只接管单轮入口**：`codex exec --remote <ADDR>` 发起新线程或 `exec resume` 按 UUID 恢复闲置线程。顶层和子命令可指定远程端点，两个不同端点会直接拒绝。远端配置模型、凭据和工作目录，不接受客户端强行覆盖。
+- **区分握手认证与模型授权**：可指定 `--remote-auth-token-env` 的环境变量名称，客户端在握手时传 bearer。带令牌时只允许 wss 或回环 ws；客户端规则不能代替对服务器认证、授权、可达范围的审计。
+- **绑定线程和 turn 读取结果**：脚本用线程 UUID 记录接力，从 JSONL 里消费完成事件并核对退出状态。目标线程已有 active turn 时拒绝，未完成就断开会报错；重试前应先读远端状态，而不是默认任务没有执行。
+
+## 关键机制
+
+通过 app-server RPC 执行 thread/start 或 thread/resume，继而发 turn/start，再由 exec 共享的处理循环按 thread/turn 过滤事件。此非交互路径不提供现场人工批准：新线程和 turn 请求使用 Never 策略，不等于移除沙箱，不能部署到依赖逐条人审的任务。不是 /rc 设备配对、远程 TUI 或任意模型的双向调度器。
+
+## 作者结果与可核对事实
+
+- **已进入 0.171.0 发行**：PR #61707 于 11 月 16 日合并，0.171.0 官方发行时间 11 月 20 日 00:44:47 UTC；按可安装版本计入本期。 [来源](https://github.com/openai/codex/releases/tag/rust-v0.171.0)
+- **正式源码包含可复核的集成验证**：测试给客户端使用空 CODEX_HOME 并移去测试用服务端 API key，检查新线程 JSONL 中完成事件，按 UUID 续发并验证文本线程头，以及两个冲突端点被拒。这里只读了上游测试，未启动服务或跑测试。 [来源](https://github.com/openai/codex/pull/61707/files)
+- **断流与活跃线程有明确失败边界**：固定版本代码拒绝已 active 的线程；在正常完成前断流不会按成功退出。该信号不证明远端回滚或自动重连。 [来源](https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/exec/src/lib.rs)
+
+## 边界与未知
+
+- 只验证官方发行和源码。没有跨机器延迟、任务恢复成功率或租户隔离实测。
+- 不接受客户端设置模型、cwd、sandbox、图像输入和自定义输出 schema 等配置；远程 resume 要 UUID，不用 --last。
+- Bearer 环境变量用于 app-server 的 WebSocket 握手；服务端模型凭据是另一个层面。不要把有 TLS 或客户端支持令牌当成服务器已正确授权，更不要把端点暴露公网。
+
+## 工程建议（未实测）
+
+- 最小对照：在受控已有服务和临时只读测试仓先验证一次文本任务、记录线程 UUID，再根据 UUID 续发，核对 JSONL 完成事件、退出状态和服务端所见目录。不要搬现有生产凭据或生产任务来试。
+- 多代理接力仍要自己做轮次所有权、授权、结果落盘和退避；出错先读取远端 turn 状态，再决定重新提交，避免重复触发动作。
+
+## 阅读范围
+
+已读官方发行相关条目、#61707 九文件完整补丁及其测试、固定发行版远程 exec、WebSocket 握手与令牌判定、共享完成循环；未运行 CLI、启动服务或修改认证。
+
+## 原始来源
+
+- [Codex 0.171.0 官方发行](https://github.com/openai/codex/releases/tag/rust-v0.171.0)
+- [PR、实现与集成测试](https://github.com/openai/codex/pull/61707/files)
+- [固定发行版的远程 exec](https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/exec/src/remote.rs)
+- [固定版连接验证与认证头](https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/app-server-client/src/remote.rs)
+- [固定版 turn 事件与断流处理](https://github.com/openai/codex/blob/rust-v0.171.0/codex-rs/exec/src/lib.rs)
