@@ -1,0 +1,208 @@
+{
+  "date": "2026-11-22",
+  "title": "可回放的 4D 高斯片段与批量向量对齐",
+  "edition_label": "公开来源增量研究",
+  "summary": "两项深读：Animated SOG 把已有动态高斯封装为浏览器可播放的片段；LightRAG 候选版本修复 Jina 批量嵌入的文本与向量配对。",
+  "notice": "区分预烘焙回放与实时驱动、源码可用与包已发布、作者测量与独立复现。本轮未运行模型、播放样片或调用线上嵌入服务。",
+  "verified_at": "2026-11-22T00:07:24.832Z",
+  "items": [
+    {
+      "id": "animated-sog-4d-playback",
+      "title": "Animated SOG：把预制动态高斯与声音打包成网页可回放片段",
+      "category": "数字人 / 几何",
+      "finding": "11月20日首次提交编码/播放源码；21日新增带声6秒样本并修改播放器。作者示例已有TRiGS体积约缩至1/11。",
+      "relevance": "可测试浏览器端预制片段交付，但不是数字人驱动升级。",
+      "action": "先用源码样本验证换视角、音画同步与首播等待。",
+      "caveat": "公开注册表404，先从源码；逐帧PLY拟合另需外部AGPL训练器。",
+      "recency_label": "新源码/样本，非训练权重",
+      "source_date": "初始提交 2026-11-20 10:45:11 UTC；带声样例 2026-11-21 17:16:31 UTC；核对HEAD bc976cf 为 2026-11-21 23:27:13 UTC。",
+      "sources": [
+        {
+          "title": "格式规范",
+          "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/format.md"
+        },
+        {
+          "title": "作者测试",
+          "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/results.md"
+        },
+        {
+          "title": "PLY序列转换",
+          "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/pipeline.md"
+        },
+        {
+          "title": "播放器和限制",
+          "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/js/README.md"
+        },
+        {
+          "title": "样本素材",
+          "url": "https://github.com/arrival-space/animated-sog/tree/bc976cf106363a4bad25a21405f9281622ce1a65/test-data"
+        },
+        {
+          "title": "公开MIT许可证",
+          "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/LICENSE"
+        },
+        {
+          "title": "带声样本提交",
+          "url": "https://github.com/arrival-space/animated-sog/commit/c3e893b4a52271199e75cf4bb5905e52e4690f29"
+        },
+        {
+          "title": "公开源码",
+          "url": "https://github.com/arrival-space/animated-sog"
+        },
+        {
+          "title": "官方PlayCanvas示例",
+          "url": "https://arrival-space.github.io/animated-sog/examples/playcanvas/"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-22/animated-sog-4d-playback.md"
+    },
+    {
+      "id": "lightrag-jina-embedding-order",
+      "category": "知识库 / RAG",
+      "title": "LightRAG：先校验 Jina 批次行号，再把向量写给对应文本",
+      "finding": "LightRAG Jina 绑定按完整、唯一的 index 将嵌入行还原为输入顺序；混合或无效索引报错，完全无索引仍兼容旧端点。",
+      "relevance": "数据入库阶段的静默配对错误不会被普通维度或行数检查捕获，可能污染召回。",
+      "action": "测试倒序与非法索引响应；怀疑旧数据受影响时先抽样审计，不盲目重建。",
+      "caveat": "已进入 v1.5.8rc2 候选版而非稳定发布。全无索引端点仍依赖顺序；无独立线上验证。",
+      "recency_label": "11月21日合并并随RC发布 / 未独立实测",
+      "source_date": "主分支合并2026-11-21T14:29:21Z；候选版发布2026-11-21T18:43:44Z；11月22日上海核查。",
+      "sources": [
+        {
+          "title": "合并PR与作者验证",
+          "url": "https://github.com/HKUDS/LightRAG/pull/4532"
+        },
+        {
+          "title": "固定RC绑定",
+          "url": "https://github.com/HKUDS/LightRAG/blob/v1.5.8rc2/lightrag/llm/jina.py#L160-L195"
+        },
+        {
+          "title": "固定RC离线回归",
+          "url": "https://github.com/HKUDS/LightRAG/blob/v1.5.8rc2/tests/llm/jina_impl/test_jina_embedding_order.py"
+        },
+        {
+          "title": "按位写入示例",
+          "url": "https://github.com/HKUDS/LightRAG/blob/v1.5.8rc2/lightrag/kg/nano_vector_db_impl.py#L765-L790"
+        },
+        {
+          "title": "RC发行记录",
+          "url": "https://github.com/HKUDS/LightRAG/releases/tag/v1.5.8rc2"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-22/lightrag-jina-embedding-order.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "自11月21日00:00 UTC，CAP4D、Kirschstein FlexAvatar、DEGAS、SplatCtrlA、FastFrames、AURA默认分支未发现新增提交；不涵盖全部分支或外部权重。",
+      "sources": [
+        {
+          "title": "felixtaubner/cap4d",
+          "url": "https://github.com/felixtaubner/cap4d/commits/"
+        },
+        {
+          "title": "tobias-kirschstein/flexavatar",
+          "url": "https://github.com/tobias-kirschstein/flexavatar/commits/"
+        },
+        {
+          "title": "initialneil/DEGAS",
+          "url": "https://github.com/initialneil/DEGAS/commits/"
+        },
+        {
+          "title": "xiangjun-xj/SplatCtrlA-release",
+          "url": "https://github.com/xiangjun-xj/SplatCtrlA-release/commits/"
+        },
+        {
+          "title": "apple-aiml-research/ml-fastframes",
+          "url": "https://github.com/apple-aiml-research/ml-fastframes/commits/"
+        },
+        {
+          "title": "kyutai-labs/aura",
+          "url": "https://github.com/kyutai-labs/aura/commits/"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "finding": "11月21日报道的FastH3-Omni包含旧资产；官方V1、Comfy、NVFP4和MLX元数据最后更新在10月20–21日，不作本期新发布。arXiv cs.CV最近仍是11月20日213条；AURA与FastFrames不重复收录。",
+      "sources": [
+        {
+          "title": "FastH3 Omni官方合集",
+          "url": "https://huggingface.co/collections/FastVideo/fasth3-omni"
+        },
+        {
+          "title": "官方MLX权重元数据",
+          "url": "https://huggingface.co/api/models/FastVideo/FastH3-Omni-MLX"
+        },
+        {
+          "title": "arXiv cs.CV近期列表",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "finding": "11月21日UTC起 GitHub默认分支定向复查未见Docling、MinerU、Crawl4AI最新提交；Docling幻灯片轨道不重复。",
+      "sources": [
+        {
+          "title": "docling-project/docling",
+          "url": "https://github.com/docling-project/docling/commits/"
+        },
+        {
+          "title": "opendatalab/MinerU",
+          "url": "https://github.com/opendatalab/MinerU/commits/"
+        },
+        {
+          "title": "unclecode/crawl4ai",
+          "url": "https://github.com/unclecode/crawl4ai/commits/"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "除Jina配对外，LightRAG同日有关系权重、重排去重及库绑定维护候选；RAGFlow与Haystack默认分支未查到UTC 11月21日以来提交。未将初筛改动写成复现。",
+      "sources": [
+        {
+          "title": "HKUDS/LightRAG",
+          "url": "https://github.com/HKUDS/LightRAG/commits/"
+        },
+        {
+          "title": "infiniflow/ragflow",
+          "url": "https://github.com/infiniflow/ragflow/commits/"
+        },
+        {
+          "title": "deepset-ai/haystack",
+          "url": "https://github.com/deepset-ai/haystack/commits/"
+        }
+      ]
+    },
+    {
+      "category": "智能体 / 应用",
+      "finding": "核查 Codex 最近正式版仍是已收录的 0.171.0，另有 Alpha 预发行；初筛 Deep Agents 的 MCP 信任提示与消息归并更新，未升为独立详解。",
+      "sources": [
+        {
+          "title": "Codex 发行记录",
+          "url": "https://github.com/openai/codex/releases"
+        },
+        {
+          "title": "Deep Agents 发行记录",
+          "url": "https://github.com/langchain-ai/deepagents/releases"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "finding": "OpenAI API 公开更新页最新仍是已收录的 11 月 19 日 GPT-Live 更新，Claude Code 更新日志首项仍是上期初筛的 2.1.330。在已核来源中未发现值得单列的新用法。",
+      "sources": [
+        {
+          "title": "OpenAI API 更新记录",
+          "url": "https://developers.openai.com/api/docs/changelog"
+        },
+        {
+          "title": "Anthropic Claude Code 官方更新日志",
+          "url": "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md"
+        }
+      ]
+    }
+  ]
+}
