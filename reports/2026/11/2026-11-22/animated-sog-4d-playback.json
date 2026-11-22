@@ -1,0 +1,89 @@
+{
+  "id": "animated-sog-4d-playback",
+  "title": "Animated SOG：把预制动态高斯与声音打包成网页可回放片段",
+  "problem": "逐帧重建的高斯序列体积大，各帧点集不对应，逐帧播放易闪烁。如何把已有动态内容做成易分发的带声体积视频？",
+  "inputs": "已有TRiGS运行时 .trigsbin 与可选音轨；也可输入逐帧3DGS PLY，但该路线需要先用外部训练器拟合。",
+  "outputs": "一个包含运动高斯、球谐属性和可选音轨的 .asog v1 文件。PlayCanvas、three.js 播放预录动作时可以换视角。它不是新的口型/骨骼驱动器。",
+  "pipeline": [
+    {
+      "title": "两种输入路径",
+      "explanation": "已具TRiGS运动参数直接编码；独立PLY序列先渲染多视角监督、用外部Open4DGS拟合短寿命运动高斯。"
+    },
+    {
+      "title": "分别压静态与运动参数",
+      "explanation": "沿用SOG v2的静态属性量化；编码每个高斯的寿命及刚体运动，在单文件中按解码顺序存流，音轨附在末尾。"
+    },
+    {
+      "title": "下载同时解码，GPU按播放时间渲染",
+      "explanation": "播放器分流解码，随时间计算运动，可播放/循环音轨。这里的流式是文件下载和解码重叠，不是实时生成动作，不保证首段下载即播放。"
+    }
+  ],
+  "mechanism": "压缩的核心是用共享动态模型替代每帧独立重排的点集；量化与剪枝再交换体积和细节。对预制回放有价值，不能当成保留可操控SMPL-X/FLAME参数的交付格式。",
+  "results": [
+    {
+      "claim": "已有TRiGS输入可直接压缩",
+      "evidence": "作者六段样本约11.1–11.5倍；Charlie质量扫描319→28.9MB、45.3dB（6视角×2时刻，渲染对源）；同文体积表列28.4MB，不合并为精确同一条记录。",
+      "source": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/results.md"
+    },
+    {
+      "claim": "逐帧PLY方案有拟合成本和失真",
+      "evidence": "作者 Rubloff 6 秒、180 帧，原 PLY 3.6 GB / 逐帧 SOG 202 MB；在 8 个未参与拟合的相机上，默认剪枝 30% 为 8.6 MB / 41.0 dB，不剪枝且 qp1/qa4 为 12.4 MB / 43.3 dB。作者拟合约 23 分钟（RTX 5080、6 万步、72 个 512² 训练视角）。这和前一条直接压缩 TRiGS 片段不是同一实验。",
+      "source": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/results.md"
+    },
+    {
+      "claim": "11月21日新增带声测试素材并更新播放器",
+      "evidence": "固定提交树含三份 .asog；约30.0MB的rubloff-6s-4k.asog新增MP3。其后three.js还修正低透明高斯丢失与运动排序，未独立跑浏览器。这是编码/播放工具，公开样本不是训练权重。",
+      "source": "https://github.com/arrival-space/animated-sog/tree/bc976cf106363a4bad25a21405f9281622ce1a65/test-data"
+    }
+  ],
+  "limitations": [
+    "源码MIT，逐帧PLY拟合另调用AGPL-3.0的Open4DGS trainer，外部组件和示例素材许可须独立核对。",
+    "尽管README给出安装命令，此次公开 npm 与 PyPI JSON都返回404；不把源码包版本0.1.0写成已在注册表发布。两个官方网页播放器入口返回200，未验证播放；GHCR未授权响应，未确认可直接拉取。",
+    "已核对文档、源码树与样本清单；未运行训练、浏览器或测量首帧。RTX 5080数字不能当Mac/手机实测。",
+    "播放为预烘焙的时间轨迹，不支持任意实时语音/表情或骨骼驱动。灯光或场景切换需要分段拟合。"
+  ],
+  "engineering_notes": [
+    "更适合把能导出逐帧 3DGS PLY 的已有预制角色片段或体积录制，转换成可换角度的网页交付，不替代在线驱动。屏幕 RGB 导出不能当 3DGS PLY 输入。",
+    "先用官方小样本验证指定浏览器与音轨，再拿同一预制6秒片比较体积、首播等待、嘴/手局部误差及转角表现，不急于改角色/动作主链。",
+    "团队采用前将播放器与训练工具分别审计；可直接编码已有TRiGS时，不需要引入外部训练步骤。"
+  ],
+  "sources": [
+    {
+      "title": "格式规范",
+      "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/format.md"
+    },
+    {
+      "title": "作者测试",
+      "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/results.md"
+    },
+    {
+      "title": "PLY序列转换",
+      "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/docs/pipeline.md"
+    },
+    {
+      "title": "播放器和限制",
+      "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/js/README.md"
+    },
+    {
+      "title": "样本素材",
+      "url": "https://github.com/arrival-space/animated-sog/tree/bc976cf106363a4bad25a21405f9281622ce1a65/test-data"
+    },
+    {
+      "title": "公开MIT许可证",
+      "url": "https://github.com/arrival-space/animated-sog/blob/bc976cf106363a4bad25a21405f9281622ce1a65/LICENSE"
+    },
+    {
+      "title": "带声样本提交",
+      "url": "https://github.com/arrival-space/animated-sog/commit/c3e893b4a52271199e75cf4bb5905e52e4690f29"
+    },
+    {
+      "title": "公开源码",
+      "url": "https://github.com/arrival-space/animated-sog"
+    },
+    {
+      "title": "官方PlayCanvas示例",
+      "url": "https://arrival-space.github.io/animated-sog/examples/playcanvas/"
+    }
+  ],
+  "read_scope": "检查固定 Git commit 的提交历史与样本树；读README、格式v1、编码/拟合管线、结果表、播放器README以及包清单；公开注册表HTTP核查。未安装或运行。"
+}
