@@ -1,0 +1,214 @@
+{
+  "date": "2026-11-24",
+  "title": "手机人脸注册、PR 分工与 PDF 超时边界",
+  "edition_label": "公开来源增量研究",
+  "summary": "STFR 更新注册初始化；Claude Ship 把 PR 的审查、修复、批准分开；Docling 正式版增加排队 PDF 页取消。各自的重建、人工批准与硬截止边界不混写。",
+  "notice": "本轮只核对版本、文档、源代码与作者报告，未运行模型、安装、连接仓库或执行测试。所列工程步骤为试验建议。",
+  "verified_at": "2026-11-24T00:04:59.620Z",
+  "items": [
+    {
+      "id": "stfr-triangulated-flame-init",
+      "category": "数字人 / 几何",
+      "title": "STFR：用多视角地标给 FLAME 一个更可靠的起点",
+      "finding": "新注册代码先从多视角地标三角化初始化，再稳健拟合 FLAME；对原有2DGS几何与纹理阶段不作替换。",
+      "relevance": "可用同一手机采集验证固定拓扑交付是否少修眼睑、嘴角和轮廓。",
+      "action": "先固定相机、掩膜与网格，只对比新旧注册；返工分钟与首次通过率分开记录。",
+      "caveat": "作者示例约21分钟/3090并非返工对照；完整注册依赖WrapCmd许可证与FLAME。",
+      "recency_label": "11月18日主分支改动补查",
+      "source_date": "2026-11-18T01:56:06Z；11月24日上海核查。",
+      "sources": [
+        {
+          "title": "11月18日官方补丁",
+          "url": "https://github.com/yxuhan/STFR/commit/7ef2d358b2a8047b4519f8b389783bce0e091ca4"
+        },
+        {
+          "title": "固定版本 FLAME 拟合代码",
+          "url": "https://github.com/yxuhan/STFR/blob/7ef2d358b2a8047b4519f8b389783bce0e091ca4/registration/align/AlbedoMMFitting/robust_fitting.py"
+        },
+        {
+          "title": "固定版本项目使用说明",
+          "url": "https://github.com/yxuhan/STFR/blob/7ef2d358b2a8047b4519f8b389783bce0e091ca4/README.md"
+        },
+        {
+          "title": "阶段、导出和运行配置",
+          "url": "https://github.com/yxuhan/STFR/blob/7ef2d358b2a8047b4519f8b389783bce0e091ca4/pipeline.py"
+        },
+        {
+          "title": "依赖与单独模型文件",
+          "url": "https://github.com/yxuhan/STFR/blob/7ef2d358b2a8047b4519f8b389783bce0e091ca4/ENV.md"
+        },
+        {
+          "title": "Faceform 命令行许可",
+          "url": "https://faceform.com/docs/Wrap/CommandLineInterface/CommandLineInterface.html"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-24/stfr-triangulated-flame-init.md"
+    },
+    {
+      "id": "claude-ship-pr-control",
+      "category": "大模型前沿用法",
+      "title": "Claude Ship：把 PR 审查、修复和批准分成三步",
+      "finding": "11月23日开放 PR Steward 与 Claude Approvals beta，和既有 Code Review 组成托管审查、修复、政策批准链。",
+      "relevance": "可借鉴把审查证据、写权限和最终合并分开；不是跨框架代理调度。",
+      "action": "仅在允许的低风险测试仓，观察审批并保留人工合并门，不开启自动合并。",
+      "caveat": "GitHub Team/Enterprise 组织工作流；/ship 可能推送及开PR。观察模式也可能计费，未实跑。",
+      "recency_label": "11月23日厂商 beta",
+      "source_date": "官方公告2026-11-23；11月24日上海核查。",
+      "sources": [
+        {
+          "title": "11月23日正式发布说明",
+          "url": "https://claude.com/resources/articles/introducing-claude-ship"
+        },
+        {
+          "title": "Claude Ship设置与边界",
+          "url": "https://code.claude.com/docs/en/claude-ship"
+        },
+        {
+          "title": "主管理流程与模式",
+          "url": "https://claude.com/product/claude-ship"
+        },
+        {
+          "title": "Code Review连接权限",
+          "url": "https://code.claude.com/docs/en/code-review-setup"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-24/claude-ship-pr-control.md"
+    },
+    {
+      "id": "docling-pdf-stop-queued-pages",
+      "category": "采集 / 工具",
+      "title": "Docling 2.152.0：PDF 超时可取消排队页，但不是硬截止",
+      "finding": "v2.152.0将多线程PDF中止接到按文档取消：删除排队页和未读结果，已领页仍需收尾。",
+      "relevance": "批量清洗文档时可以避免继续做部分无用工作，但不能把超时参数当成严格请求 SLA。",
+      "action": "在公开PDF上分别测超时通知、调用返回与资源释放，尤其抽样比较新依赖导致的解析输出差异。",
+      "caveat": "仅对应支持取消的线程后端；作者测试未独立运行，单页工作不硬中断。",
+      "recency_label": "11月23日合并并随 v2.152.0 发布 / 未独立实测",
+      "source_date": "合并2026-11-23T10:28:40Z；发行2026-11-23T13:29:58Z；11月24日上海核查。",
+      "sources": [
+        {
+          "title": "发布 v2.152.0",
+          "url": "https://github.com/docling-project/docling/releases/tag/v2.152.0"
+        },
+        {
+          "title": "变更PR与作者验证",
+          "url": "https://github.com/docling-project/docling/pull/5456"
+        },
+        {
+          "title": "固定版超时说明",
+          "url": "https://github.com/docling-project/docling/blob/v2.152.0/docs/usage/advanced_options.md#set-a-pdf-conversion-timeout"
+        },
+        {
+          "title": "固定版标准PDF流水线",
+          "url": "https://github.com/docling-project/docling/blob/v2.152.0/docling/pipeline/standard_pdf_pipeline.py"
+        },
+        {
+          "title": "真实解析器取消/卸载测试",
+          "url": "https://github.com/docling-project/docling/blob/v2.152.0/tests/test_backend_docling_parse.py"
+        },
+        {
+          "title": "等待页生产者的回归测试",
+          "url": "https://github.com/docling-project/docling/blob/v2.152.0/tests/test_threaded_pipeline.py"
+        },
+        {
+          "title": "底层取消语义",
+          "url": "https://github.com/docling-project/docling-parse/pull/474"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-24/docling-pdf-stop-queued-pages.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "CAP4D、FlexAvatar、DEGAS、SplatCtrlA、FastFrames、Animated SOG默认分支自11月23日00:00 UTC未发现新提交；AURA 11月23日新增仅改README演示链接格式，不是新推理能力。",
+      "sources": [
+        {
+          "title": "felixtaubner/cap4d",
+          "url": "https://github.com/felixtaubner/cap4d/commits/"
+        },
+        {
+          "title": "tobias-kirschstein/flexavatar",
+          "url": "https://github.com/tobias-kirschstein/flexavatar/commits/"
+        },
+        {
+          "title": "initialneil/DEGAS",
+          "url": "https://github.com/initialneil/DEGAS/commits/"
+        },
+        {
+          "title": "xiangjun-xj/SplatCtrlA-release",
+          "url": "https://github.com/xiangjun-xj/SplatCtrlA-release/commits/"
+        },
+        {
+          "title": "apple-aiml-research/ml-fastframes",
+          "url": "https://github.com/apple-aiml-research/ml-fastframes/commits/"
+        },
+        {
+          "title": "arrival-space/animated-sog",
+          "url": "https://github.com/arrival-space/animated-sog/commits/"
+        },
+        {
+          "title": "AURA文档差异",
+          "url": "https://github.com/kyutai-labs/aura/commit/10c885c8e4"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "finding": "11月23日arXiv cs.CV列表171条，筛查到FACET与Refrain；Refrain仅初筛不作推荐。Unity绑定工具11月21最新提交仅标注目录，发布记录为9月29日，非本期新开源。",
+      "sources": [
+        {
+          "title": "arXiv cs.CV",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        },
+        {
+          "title": "Refrain",
+          "url": "https://arxiv.org/abs/2611.27806"
+        },
+        {
+          "title": "Unity项目提交",
+          "url": "https://github.com/uhhhci/Gsplat-unity-virtual-human/commits/"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "RAGFlow 11月23日增添解析配置与PDF解析器候选，LightRAG 主要检出运行配置与测试维护；Haystack 有摘要截断和分块重叠修复候选，只作筛查；本期没有新增全文条目。",
+      "sources": [
+        {
+          "title": "ragflow",
+          "url": "https://github.com/infiniflow/ragflow/pull/22688"
+        },
+        {
+          "title": "haystack",
+          "url": "https://github.com/deepset-ai/haystack/pull/13737"
+        },
+        {
+          "title": "LightRAG",
+          "url": "https://github.com/HKUDS/LightRAG/commits/"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "finding": "FACET 11月23日列表可见（v1 11月19日提交）：局部头部形变模型，论文对照为同拓扑的全局PCA，不是公开FLAME；代表性全容量结果并非等参数比较。未核到官方代码权重，本期只列待跟进。",
+      "sources": [
+        {
+          "title": "FACET全文",
+          "url": "https://arxiv.org/pdf/2611.26773"
+        },
+        {
+          "title": "arXiv版本记录",
+          "url": "https://arxiv.org/abs/2611.26773"
+        },
+        {
+          "title": "SIGGRAPH Asia议程作者页",
+          "url": "https://sa2026.conference-schedule.org/presenter/?uid=719293"
+        },
+        {
+          "title": "ACM DOI",
+          "url": "https://doi.org/10.1145/3829339.3847830"
+        }
+      ]
+    }
+  ]
+}
