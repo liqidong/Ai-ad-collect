@@ -1,0 +1,61 @@
+---
+type: capture
+review_state: 草稿
+pending_revision: false
+date: 2026-11-24
+verified_at: "2026-11-24T00:04:59.620Z"
+---
+
+# Docling 2.152.0：PDF 超时可取消排队页，但不是硬截止
+
+## 问题
+
+一份 PDF 超时或消费者停止读页后，多线程解析器此前可能仍要排空已经安排的页任务。此次改动解决的是取消与回收无用任务，不是前几期的文档布局和内嵌媒体解析。
+
+## 输入
+
+使用 threaded docling-parse 后端的 PDF 转换、文档键、可选 document_timeout 和解析线程配置；对应依赖至少 7.27.0、低于 8.0.0。
+
+## 输出
+
+取消该文档尚未被领取的页和未读取结果，卸载关闭输入；已经被工作线程领取的页可以继续完成，其被取消结果丢弃。
+
+## 流程
+
+- **停止接收并发出取消**：标准 PDF 流水线检测超时后标记该回合、关闭第一级输入队列，先通知后端取消再等待页生产者退出。原生与 VLM 路径停止消费，在后端卸载时取消。
+- **按文档键清理**：线程后端将取消委托给 docling-parse，按键删除排队内容和未读结果，不主动中止已领取页。其他后端接口默认只是空操作，不应类推。
+- **等待领取任务收尾并关闭输入**：后端卸载替代原先的排空循环；原生等待可释放 GIL，底层仍要等正在处理的页。
+
+## 关键机制
+
+核心是把停止消费、取消排队页和等待实际资源释放分开。取消发出时间与 HTTP/调用返回时间不必相同，document_timeout 不是硬截止。
+
+## 作者结果与可核对事实
+
+- **已经随发行交付**：PR #5456 于2026-11-23 10:28:40 UTC合并（4c0a96de）；v2.152.0 于13:29:58 UTC发布，固定标签源码含后端 cancel/unload。 [来源](https://github.com/docling-project/docling/releases/tag/v2.152.0)
+- **有真实解析器和受控生产者回归**：真实解析器回归对比显式取消和有任务时卸载，断言输入流关闭、迭代停止、文档键释放。另一测试用阻塞生产者核验取消先于等待，非线上耗时基准。 [来源](https://github.com/docling-project/docling/blob/v2.152.0/tests/test_backend_docling_parse.py)
+- **作者定向验证不等于输出无漂移**：作者报告77项定向测试通过；较早CI有17项PDF输出不匹配，其中两份在本地由7.23.0切至7.27.0可重现差异。未独立复现，不能把旧CI数字误写成发行版仍失败或输出完全不变。 [来源](https://github.com/docling-project/docling/pull/5456)
+
+## 边界与未知
+
+- 不强制杀掉已领取页，取消后仍可能超过 document_timeout；与进程级硬截止不同。
+- 不把合并中 groundtruth 调整视为质量提升；未测真实批处理吞吐、单页耗时或峰值内存。
+
+## 工程建议（未实测）
+
+- 先在隔离环境以多个公开长PDF设置短超时，对照普通结束和超时结束，记录应用返回、原生资源释放两个时间点。
+- 升级前抽样比对关键表格和坐标等结构输出，特别适合依赖版本切换后做差分；如服务有硬 SLA，应另建隔离/超时策略。
+
+## 阅读范围
+
+审阅原PR、核心实现和边界测试补丁、固定发行标签及上游取消说明。未逐一比对全部golden文件，未运行。
+
+## 原始来源
+
+- [发布 v2.152.0](https://github.com/docling-project/docling/releases/tag/v2.152.0)
+- [变更PR与作者验证](https://github.com/docling-project/docling/pull/5456)
+- [固定版超时说明](https://github.com/docling-project/docling/blob/v2.152.0/docs/usage/advanced_options.md#set-a-pdf-conversion-timeout)
+- [固定版标准PDF流水线](https://github.com/docling-project/docling/blob/v2.152.0/docling/pipeline/standard_pdf_pipeline.py)
+- [真实解析器取消/卸载测试](https://github.com/docling-project/docling/blob/v2.152.0/tests/test_backend_docling_parse.py)
+- [等待页生产者的回归测试](https://github.com/docling-project/docling/blob/v2.152.0/tests/test_threaded_pipeline.py)
+- [底层取消语义](https://github.com/docling-project/docling-parse/pull/474)
