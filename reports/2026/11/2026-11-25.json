@@ -1,0 +1,182 @@
+{
+  "date": "2026-11-25",
+  "title": "实时高斯的传输边界、Docling 结构入库与 Codex 会话恢复",
+  "edition_label": "算法研究日报 · 11 月 25 日（上海）",
+  "summary": "三项各自解决一个落地瓶颈：直播高斯的传输、外部 PDF 解析的来源坐标、CLI 恢复的执行边界。它们分别是论文、已合并补丁、正式 CLI 版本。",
+  "notice": "来源为公开原文。工程建议未独立复现，不将多卡实验等同普通客户端性能，不将主分支合并等同稳定版交付。",
+  "verified_at": "2026-11-25T00:04:55Z",
+  "items": [
+    {
+      "id": "holosplat-prehead-streaming",
+      "title": "HoloSplat：实时自由视角人像传中间特征，而不是传完整高斯",
+      "category": "数字人 / 几何",
+      "finding": "八路标定真人视频的服务器把高斯预测头之前的中间特征分帧压缩，客户端解码 3DGS。作者五张 5090 的 Wi-Fi 实验平均端到端 204–304 ms。",
+      "relevance": "可作为多机位真人体积直播的系统设计参考，不是可驱动人物资产或已可安装的工具。",
+      "action": "先借用延迟和码率验收设计，分别看首帧、捕获到显示延迟及可用帧率；未开放前不按单卡性能排期。",
+      "caveat": "作者多卡实验；代码待发布，权重未确认。",
+      "recency_label": "11月24日arXiv列表发现 / 论文公开",
+      "source_date": "arXiv v1 2026-11-23 18:11:00 UTC；11月24日列入cs.CV。",
+      "sources": [
+        {
+          "title": "作者项目页",
+          "url": "https://heaticy.github.io/HoloSplat/"
+        },
+        {
+          "title": "论文及实验附录",
+          "url": "https://arxiv.org/pdf/2611.31140"
+        },
+        {
+          "title": "版本及提交时间",
+          "url": "https://arxiv.org/abs/2611.31140"
+        },
+        {
+          "title": "论文 HTML（§3–4 与 S7）",
+          "url": "https://arxiv.org/html/2611.31140v1"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-25/holosplat-prehead-streaming.md"
+    },
+    {
+      "id": "ragflow-docling-json-provenance",
+      "category": "知识库 / RAG",
+      "title": "RAGFlow 原生导入 Docling JSON：保留阅读顺序、标题与页坐标",
+      "finding": "RAGFlow #22728 能将 Docling JSON 的正文按树序读成段落与标题，并把原页号和有效坐标带进 General 切块。",
+      "relevance": "可先在外部做文档解析，再把结构化正文送去知识库，不必把整份 JSON 当成无结构文本。",
+      "action": "用公开 PDF 的 Docling JSON 验证跨页引用、标题等级和段落；表格、图片、公式另测。",
+      "caveat": "只覆盖首批正文与标题；已合并主分支，未确认随稳定版交付，无独立召回实测。",
+      "recency_label": "11月24日主分支合并 / 未独立运行",
+      "source_date": "2026-11-24T11:06:43Z 合并；11月25日上海核查。",
+      "sources": [
+        {
+          "title": "PR与作者验证",
+          "url": "https://github.com/infiniflow/ragflow/pull/22728"
+        },
+        {
+          "title": "固定版本导入实现",
+          "url": "https://github.com/infiniflow/ragflow/blob/190e62319f238dc09c4df9fe624efd7fa5c373e9/internal/parser/parser/json_parser_docling.go"
+        },
+        {
+          "title": "固定版本逐项测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/190e62319f238dc09c4df9fe624efd7fa5c373e9/internal/parser/parser/json_parser_docling_test.go"
+        },
+        {
+          "title": "General端到端桩测试",
+          "url": "https://github.com/infiniflow/ragflow/blob/190e62319f238dc09c4df9fe624efd7fa5c373e9/internal/ingestion/component/chunker/general_test.go"
+        },
+        {
+          "title": "导入配置指南",
+          "url": "https://github.com/infiniflow/ragflow/blob/190e62319f238dc09c4df9fe624efd7fa5c373e9/docs/guides/dataset/configuration.md"
+        },
+        {
+          "title": "RAGFlow v1.0.0发行",
+          "url": "https://github.com/infiniflow/ragflow/releases/tag/v1.0.0"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-25/ragflow-docling-json-provenance.md"
+    },
+    {
+      "id": "codex-exec-resume-permission-context",
+      "category": "大模型前沿用法",
+      "title": "Codex 0.172.0：恢复 CLI 任务时保留原工作目录与权限",
+      "finding": "11 月 24 日正式版把 CLI 恢复时的默认值改为线程已保存的权限、工作目录与工作区根，并完善不同操作系统之间的远程路径保留。",
+      "relevance": "长实验脚本或远程主机调度中，恢复上下文不应悄悄改变读写边界；这一变化与远程接入功能不同。",
+      "action": "只在临时仓库用相同会话 ID 做一次只读恢复，检查首个写请求被拒绝且 cwd/roots 一致。",
+      "caveat": "不能替代作业和产物检查点；无法恢复旧配置时要求明确选择。上一期已追踪过的子代理中断回信不重复计入。",
+      "recency_label": "官方版本已发布",
+      "source_date": "2026-11-24",
+      "sources": [
+        {
+          "title": "官方 0.172.0 发布说明",
+          "url": "https://github.com/openai/codex/releases/tag/rust-v0.172.0"
+        },
+        {
+          "title": "#62194 exec 恢复权限、目录与工作区",
+          "url": "https://github.com/openai/codex/pull/62194"
+        },
+        {
+          "title": "#62375 跨平台工作目录",
+          "url": "https://github.com/openai/codex/pull/62375"
+        },
+        {
+          "title": "#62376 跨平台可写根",
+          "url": "https://github.com/openai/codex/pull/62376"
+        },
+        {
+          "title": "#62377 跨平台工作区根",
+          "url": "https://github.com/openai/codex/pull/62377"
+        },
+        {
+          "title": "#62360 按应用工具指定审批者",
+          "url": "https://github.com/openai/codex/pull/62360"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-25/codex-exec-resume-permission-context.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "核对CAP4D、Kirschstein FlexAvatar、DEGAS、SplatCtrlA、AURA及Animated SOG默认分支自11月24日00:00 UTC未见新提交；不覆盖其他分支或托管权重。",
+      "sources": [
+        {
+          "title": "DEGAS提交",
+          "url": "https://github.com/initialneil/DEGAS/commits/"
+        },
+        {
+          "title": "Animated SOG提交",
+          "url": "https://github.com/arrival-space/animated-sog/commits/"
+        },
+        {
+          "title": "AURA提交",
+          "url": "https://github.com/kyutai-labs/aura/commits/"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "finding": "浏览 11 月 24 日 cs.CV 列表：AvatarAnyone 和 RAGA 不升级为推荐；CADENCE 在 11 月 19 日提交，单目时序 SMPL-X 拟合有价值，但没有可核实的近期工程发布，不是现成训练动作。",
+      "sources": [
+        {
+          "title": "arXiv cs.CV列表",
+          "url": "https://arxiv.org/list/cs.CV/recent"
+        },
+        {
+          "title": "AvatarAnyone",
+          "url": "https://arxiv.org/abs/2611.30777"
+        },
+        {
+          "title": "RAGA",
+          "url": "https://arxiv.org/abs/2611.29026"
+        },
+        {
+          "title": "CADENCE",
+          "url": "https://arxiv.org/abs/2611.26783"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "finding": "Docling 筛到无词表格跳过解码、原生PDF报告缺页等独立维护；不重复昨日取消排队页。MinerU、Crawl4AI 自11月24日UTC起默认分支未查到提交。",
+      "sources": [
+        {
+          "title": "Docling #5554",
+          "url": "https://github.com/docling-project/docling/pull/5554"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "LightRAG 查询预算计数缓存、Haystack 预处理参数补齐只作提交层筛查；优先选可实现跨工具结构化导入的 RAGFlow。",
+      "sources": [
+        {
+          "title": "LightRAG #4642",
+          "url": "https://github.com/HKUDS/LightRAG/pull/4642"
+        },
+        {
+          "title": "Haystack #13513",
+          "url": "https://github.com/deepset-ai/haystack/pull/13513"
+        }
+      ]
+    }
+  ]
+}
