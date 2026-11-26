@@ -1,0 +1,176 @@
+{
+  "date": "2026-11-26",
+  "title": "固定相机怎么评分、全身高斯怎么补背面、子代理跑了哪个模型",
+  "edition_label": "算法研究日报 · 11 月 26 日（上海）",
+  "summary": "高斯校正要区分固定相机和对齐分数；RAGA 补读研究新观测怎样更新已有资产；Magpie 的改动可排查辅助模型路由，而非检测模型能力。",
+  "notice": "仅使用公开原始证据。维护者实验、论文报告和建议分开；本期未安装或独立复验。",
+  "verified_at": "2026-11-26T00:03:11Z",
+  "items": [
+    {
+      "id": "lichtfeld-frozen-camera-eval",
+      "title": "LichtFeld Studio 0.5.4.3：标定校正默认开启，固定相机与对齐分数分列",
+      "category": "数字人 / 几何",
+      "finding": "新发行版默认启用每训练图小幅像面校正，并把固定相机与对齐后的评分分开。100 张全景样例固定 PSNR 下降 2.89 dB，对齐 PSNR 上升 2.74 dB。",
+      "relevance": "给高斯重建和静态资产加入一条可验证的相机口径，不把可对齐的外观分数当几何证据。",
+      "action": "固定训练/留出照片和相机，只切换校正，主指标读 plain；如要比较对齐比分，统一用同一评估处理两臂。",
+      "caveat": "作者样例不是人脸或 Mesh 精度研究，无独立复验；可选姿态优化与校正不同。",
+      "recency_label": "11 月 23 日官方发行",
+      "source_date": "2026-11-23",
+      "sources": [
+        {
+          "title": "官方 0.5.4.3 发行",
+          "url": "https://github.com/MrNeRF/LichtFeld-Studio/releases/tag/v0.5.4.3"
+        },
+        {
+          "title": "训练像面校正与测试 #4119",
+          "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4119"
+        },
+        {
+          "title": "普通与对齐指标分离 #4138",
+          "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4138"
+        },
+        {
+          "title": "默认启用 #4147",
+          "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4147"
+        },
+        {
+          "title": "训练相机姿态优化 #4048",
+          "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4048"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-26/lichtfeld-frozen-camera-eval.md"
+    },
+    {
+      "id": "raga-refreshable-uv-avatar",
+      "title": "RAGA：单张图先建全身高斯，看见新角度后再补外观",
+      "category": "数字人 / 几何",
+      "finding": "把同一人的新图像累积到统一UV坐标，再用原解码器更新高斯外观；更新本身不重训。",
+      "relevance": "适合参考单图初始化后逐步修补衣服背面等盲区；不是语音、口型或Mac部署方案。",
+      "action": "先在已有UV绑定上用前视、侧视和留出的后视验证投影质量，不替换主链。",
+      "caveat": "论文公开、官方代码权重尚未确认；拟合、抠图与更新仍有代价。",
+      "recency_label": "11月24日列表论文补读",
+      "source_date": "v1提交2026-11-21 20:22:36 UTC，11月24日cs.CV列表；不是11月26日新发布。",
+      "sources": [
+        {
+          "title": "arXiv原文",
+          "url": "https://arxiv.org/abs/2611.29026"
+        },
+        {
+          "title": "论文正文与表格",
+          "url": "https://arxiv.org/pdf/2611.29026"
+        },
+        {
+          "title": "版本固定 HTML 与原始结果",
+          "url": "https://arxiv.org/html/2611.29026v1"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-26/raga-refreshable-uv-avatar.md"
+    },
+    {
+      "id": "magpie-claude-inherit-routing",
+      "title": "Magpie 0.1.4777：核对 Claude Explore/Plan 实际路由再做模型评测",
+      "category": "大模型前沿用法",
+      "finding": "标签实现对已识别的 Claude Code Explore/Plan 工具请求按配置重选模型；作者用模拟上游展示了原本 inherit 为何请求主模型。",
+      "relevance": "建立主模型与辅助模型的评测对照前，先排除路由、effort 和 fallback 混淆。",
+      "action": "用公开仓库只读已知答案题触发 Explore，分别核查主/辅助请求和最终路由，再比较定位答对率。",
+      "caveat": "不是校验服务端模型或自动测能力；必须匹配特定请求特征、目标可用且有权限。",
+      "recency_label": "发行标签和源码可核查",
+      "source_date": "2026-11-24T22:32Z（上海 11 月 25 日）",
+      "sources": [
+        {
+          "title": "官方 0.1.4777 发行",
+          "url": "https://github.com/yetone/magpie/releases/tag/v0.1.4777"
+        },
+        {
+          "title": "原始变更与请求捕获",
+          "url": "https://github.com/yetone/magpie/commit/99027d2d560caeb5635f211b884729fc7c402fca"
+        },
+        {
+          "title": "版本固定的路由实现",
+          "url": "https://github.com/yetone/magpie/blob/v0.1.4777/internal/gateway/claude_subagent.go"
+        },
+        {
+          "title": "版本固定的回归测试",
+          "url": "https://github.com/yetone/magpie/blob/v0.1.4777/internal/gateway/claude_subagent_test.go"
+        },
+        {
+          "title": "版本固定的 MIT 许可",
+          "url": "https://github.com/yetone/magpie/blob/v0.1.4777/LICENSE"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-26/magpie-claude-inherit-routing.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "11月25日cs.CV列表302条。新HiGS 2611.31918把渲染层级扩展到重建及融合优化器；附录称新实现将来发布。NVIDIA当前项目网页的代码按钮对应旧版渲染论文2606.00352，不等于新训练实现。不把它列成可运行新发布。",
+      "sources": [
+        {
+          "title": "新HiGS论文",
+          "url": "https://arxiv.org/abs/2611.31918"
+        },
+        {
+          "title": "旧版项目页",
+          "url": "https://research.nvidia.com/labs/sil/projects/higs/"
+        },
+        {
+          "title": "arXiv近期列表",
+          "url": "https://arxiv.org/list/cs.CV/recent?show=2000"
+        }
+      ]
+    },
+    {
+      "category": "数字人 / 几何",
+      "finding": "CAP4D、DEGAS、SplatCtrlA、AURA的默认分支自11月25日00:00 UTC未看到新提交；FlexAvatar HEAD仍为6e00987。Animated SOG新增播放器URL初始视角参数，非压缩训练更新。",
+      "sources": [
+        {
+          "title": "Animated SOG播放器提交",
+          "url": "https://github.com/arrival-space/animated-sog/commit/3a07bd5d"
+        },
+        {
+          "title": "DEGAS历史",
+          "url": "https://github.com/initialneil/DEGAS/commits/"
+        }
+      ]
+    },
+    {
+      "category": "采集 / 工具",
+      "finding": "RAGFlow 来源预览与 Excel 顺序修复、Docling 2.153.0 版本更新仅筛查；不重复前两日 Docling 项。MinerU、Crawl4AI 11月25日UTC后未查到默认分支提交。",
+      "sources": [
+        {
+          "title": "RAGFlow #22781",
+          "url": "https://github.com/infiniflow/ragflow/pull/22781"
+        },
+        {
+          "title": "Docling 提交",
+          "url": "https://github.com/docling-project/docling/commits/"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "LightRAG 的 VoyageAI 向量提供者向导及端点配置属于接入扩展，仅作筛查。",
+      "sources": [
+        {
+          "title": "LightRAG #4691",
+          "url": "https://github.com/HKUDS/LightRAG/pull/4691"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "Haystack #13795 的四种文档评估器增加 top_k，NDCG 对实际和理想排序用同一截断。主分支实现已核查，未独立运行，也不视为稳定版的新检索能力。",
+      "sources": [
+        {
+          "title": "PR与作者验证",
+          "url": "https://github.com/deepset-ai/haystack/pull/13795"
+        },
+        {
+          "title": "NDCG实现",
+          "url": "https://github.com/deepset-ai/haystack/blob/56aa89c7b3bec346a0106d497588d3aebc16cfbb/haystack/components/evaluators/document_ndcg.py"
+        }
+      ]
+    }
+  ]
+}
