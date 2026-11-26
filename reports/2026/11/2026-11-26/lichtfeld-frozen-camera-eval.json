@@ -1,0 +1,71 @@
+{
+  "id": "lichtfeld-frozen-camera-eval",
+  "title": "LichtFeld Studio 0.5.4.3：标定校正默认开启，固定相机与对齐分数分列",
+  "problem": "3D 高斯训练时，小幅相机标定/图像稳定误差会让多视图观测错配；但评估时允许渲染图再对齐目标，相当于改变了指标问题。如果把对齐后分数称作固定标定的质量，就可能误判几何方案。",
+  "inputs": "已标定多视图 RGB、训练相机与 Gaussian 训练数据。每张训练图可拟合弱平滑像面形变；评价需要未用于训练的目标图和相机，且应事先冻结相机、裁剪、掩膜和训练预算。",
+  "outputs": "训练后的 3DGS、普通 PSNR/SSIM/LPIPS；开启标定校正时另报对齐后分数及逐视角记录，失败则对齐值缺失但普通结果保留。不是 Mesh 几何误差。",
+  "pipeline": [
+    {
+      "title": "训练时处理小错配",
+      "explanation": "以每张训练图的小幅平滑网格修正像面采样，从光度目标学习每张图的变形。0.5.4.3 默认开启，--no-calibration-correction 可关。"
+    },
+    {
+      "title": "把姿态重估与像面补偿分开",
+      "explanation": "可选 --pose-opt 另优化训练相机旋转及位移，不能把其结果归因给像面网格。用于主要 A/B 时两臂均禁用姿态重估及利用留出 RGB 拟合新相机。"
+    },
+    {
+      "title": "固定投影渲染，再单独对齐",
+      "explanation": "在同一组冻结留出相机直接渲染获得普通分数；开启校正时实现另拟合评估图像的对齐以估计外观，写入 *_aligned 字段。失败视角不丢普通分数。两臂需要同口径对齐时应单独使用同一个评估器，否则留空。"
+    }
+  ],
+  "mechanism": "训练像面位移可吸收标定没有解释的小幅空间误差；评估对齐估计图像错位，而不检验标准投影下的位置稳定性。校正应对真实错配的效果与对齐分数的变化是两件事；同一配置的普通和对齐结果不能混排名。",
+  "results": [
+    {
+      "claim": "维护者的 100 张全景图、30k 等步数测试，两种口径方向相反。",
+      "evidence": "关闭→开启：固定/名义相机普通 PSNR 27.58→24.69 dB；两组同口径对齐 PSNR 29.85→32.59 dB。高 PSNR 更好，但这里不能只报后一列。",
+      "source": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4119"
+    },
+    {
+      "claim": "有明确训练形变、留出图干净的对照，普通分数反而提升。",
+      "evidence": "植入训练形变的案例，关闭→开启固定普通 PSNR 21.67→24.31 dB；另一个更准确的双鱼眼场景 23.18→23.20 dB。是作者控制实验，不代表一般场景。",
+      "source": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4119"
+    },
+    {
+      "claim": "新版本改回主指标普通渲染，同时保存独立对齐列。",
+      "evidence": "维护记录明确 summary 和 per-view 字段；对齐失败不跳过整帧。初版 PR 的默认关闭已被 #4147 更新。",
+      "source": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4138"
+    }
+  ],
+  "limitations": [
+    "全景和鱼眼不是人脸几何验证，不能据此断言身份、嘴唇闭合、薄面结构或修模成本改善。",
+    "关闭校正未自动输出对齐列，不能拿一组 aligned 对比另一组 plain；存在对齐失败时报告覆盖率。",
+    "未下载或实际安装测试，也不由该版本文档推定任意硬件支持。"
+  ],
+  "engineering_notes": [
+    "小规模公开多视图样本只切换标定校正开关，锁定内外参、留出照片和掩膜，同预算、同随机种子；主次指标分别是固定相机外观与对齐后外观，另看 per-view 误差热图。",
+    "如果目标是 Mesh，需额外用独立几何扫描及预声明的对齐区域/尺度规则计算区域误差；无扫描则只报告重投影或外观，不能称几何精度。"
+  ],
+  "sources": [
+    {
+      "title": "官方 0.5.4.3 发行",
+      "url": "https://github.com/MrNeRF/LichtFeld-Studio/releases/tag/v0.5.4.3"
+    },
+    {
+      "title": "训练像面校正与测试 #4119",
+      "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4119"
+    },
+    {
+      "title": "普通与对齐指标分离 #4138",
+      "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4138"
+    },
+    {
+      "title": "默认启用 #4147",
+      "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4147"
+    },
+    {
+      "title": "训练相机姿态优化 #4048",
+      "url": "https://github.com/MrNeRF/LichtFeld-Studio/pull/4048"
+    }
+  ],
+  "read_scope": "发行说明、#4119 方法与真实/合成对照表、#4138 指标口径和失败策略、#4147 默认值、#4048 姿态拟合；未独立运行。"
+}
