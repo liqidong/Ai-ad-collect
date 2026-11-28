@@ -1,0 +1,72 @@
+{
+  "date": "2026-11-28",
+  "title": "用物体渲染约束视频镜头：AnyCam 的增量和边界",
+  "edition_label": "算法研究日报 · 11 月 28 日（上海）",
+  "summary": "补读 AnyCam：高斯代理可以表达物体相对的镜头运动，不需要作为高保真场景输出。作者测试支持新视角控制，但未核实可运行权重，也没有人物身份或直播时延证据。其他方向本期无可靠新增推荐。",
+  "notice": "公开资料研究草稿。区分作者实验与工程建议；未安装、下载或运行模型。",
+  "verified_at": "2026-11-28T00:05:01.451Z",
+  "items": [
+    {
+      "id": "anycam-object-camera-conditioning",
+      "category": "数字人 / 几何",
+      "title": "AnyCam：用场景内刚性物体的渲染表达目标相机",
+      "finding": "对源片中显眼的刚性对象建代理，将沿目标镜头渲染的序列作为相机条件，与时间对齐的源片共同喂给视频模型。",
+      "relevance": "为 Gaussian 渲染约束视频扩散提供另一种分工：代理定义相对镜头，而不是给生成视频提供真实背面。",
+      "action": "先从同轨迹参数与代理轮廓/渲染的配对试验开始，分别量镜头及身份漂移。",
+      "caveat": "论文及演示线索；未确认可运行代码及权重。作者吞吐 3.63 FPS，不是直播端到端结果。",
+      "recency_label": "上一期同批论文补读，非今日新发布",
+      "source_date": "2026-11-25 18:59:59 UTC arXiv v1；2026-11-26 cs.CV 列表。",
+      "sources": [
+        {
+          "title": "AnyCam 论文正文与附录",
+          "url": "https://arxiv.org/html/2611.34944v1"
+        },
+        {
+          "title": "arXiv 提交记录",
+          "url": "https://arxiv.org/abs/2611.34944"
+        },
+        {
+          "title": "cs.CV 公开列表",
+          "url": "https://arxiv.org/list/cs.CV/pastweek?show=500"
+        }
+      ],
+      "detail_url": "https://github.com/liqidong/Ai-ad-collect/blob/main/reports/2026/11/2026-11-28/anycam-object-camera-conditioning.md"
+    }
+  ],
+  "coverage_checks": [
+    {
+      "category": "数字人 / 几何",
+      "finding": "AnyCam 于 11 月 26 日列入 cs.CV，属于上一期同批列表的新增深读，不冒充当日首发。",
+      "sources": [
+        {
+          "title": "cs.CV 公开列表",
+          "url": "https://arxiv.org/list/cs.CV/pastweek?show=500"
+        }
+      ]
+    },
+    {
+      "category": "大模型前沿用法",
+      "finding": "无新增正式能力推荐。Claude Code 官方发行页最高可见 v2.1.332 已在前一期覆盖；Codex 11 月 27 日有 0.174.0-alpha.9 预发行，发布页没有足够的功能说明，不作为新稳定玩法。",
+      "sources": [
+        {
+          "title": "Claude Code 官方发行",
+          "url": "https://github.com/anthropics/claude-code/releases"
+        },
+        {
+          "title": "Codex 官方发行",
+          "url": "https://github.com/openai/codex/releases"
+        }
+      ]
+    },
+    {
+      "category": "知识库 / RAG",
+      "finding": "检查 RAGFlow 官方发行，未确认比此前报告多出足以单独推荐的新稳定功能。智能体 / 应用和采集 / 工具此次未核到达到纳入标准的新条目。",
+      "sources": [
+        {
+          "title": "RAGFlow 官方发行",
+          "url": "https://github.com/infiniflow/ragflow/releases"
+        }
+      ]
+    }
+  ]
+}
